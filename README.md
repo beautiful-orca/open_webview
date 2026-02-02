@@ -1,21 +1,15 @@
-# Open WebView - [XDA Thread](https://xdaforums.com/t/magisk-module-webview-open-webview.4496119/)
-
-![Open WebView](https://raw.githubusercontent.com/Magisk-Modules-Alt-Repo/open_webview/master/img/logo.png)
+# Fork of Open WebView - [XDA Thread](https://xdaforums.com/t/magisk-module-webview-open-webview.4496119/)
 
 This module helps you to replace your system webview though Magisk.
 
 ## NOTICE
-> This for me is just a hobby that I do when I have some free time (very little). If you appreciate my work please let me know, thank you!
-
->~~**ATTENTION!** There is a bug that still needs to be fixed where sometimes you may find that the installed webview doesn't work. To fix this bug you need to manually install the webview, to do this just:~~
-> - ~~download from sources the latest version of the webview you have choosen during module installation~~
-> - ~~install it~~
+> This is a fork I created for myself. My work is not related to programming or Android developement, so check before installing. It's just a hobby that I do when I have some free time (very little). The original author [F3FFO](https://github.com/F3FFO) is far knowledgeable.
 
 ## DISCLAIMER
 
 >I AM NOT RESPONSIBLE IF YOUR DEVICE DOES NOT WORK PROPERLY OR FOR ANY DAMAGE THAT MAY OCCUR TO YOUR DEVICE. BEFORE USING THIS MODULE, PLEASE READ THE CODE. YOU WHO DECIDE TO INSTALL THIS MODULE ASSUMES ALL RESPONSIBILITY FOR ANY PROBLEMS.
 
-## Compatibility
+## Compatibility (by upstream)
 
 - S.O.:
     - minimum: Android 8+
@@ -23,9 +17,7 @@ This module helps you to replace your system webview though Magisk.
 - Magisk 20.4+
 - KernelSU 0.6+
 
-> Thanks to @amteza the module works fine with KernelSU but I personally use Magisk so I can't guarantee correct functioning with KernelSU
-
-## Tested Device ROM
+## Tested Device ROM (by upstream)
 
 | API | OS | ROM | version |
 |:---:|:--:|:---:|:-------:|
@@ -39,32 +31,13 @@ This module helps you to replace your system webview though Magisk.
 | `33` | `Android 13` | `LOS 20` | `AAPT` |
 | `34*` | `Android 14` | `crDroid 10.x`, `LOS 21` | `AAPT2` |
 | `35` | `Android 15` |       | `AAPT2` |
+| `36` | `Android 16` | `CrDroid 12.5 QPR2, Magisk 30.6`| `AAPT2` |
 
 \* before the security patch update of june 2024 you can still use the AAPT version but if you have a newer version you need to use the AAPT2 version
 
-
-You can easily add more ROM to this table opening a new issue with some basics info:
-- device
-- Android version
-- custom rom
-- rooting method
-- module version
-- AAPT or AAPT2
-
-```
-Es.
-- POCO F2 PRO
-- Android 14
-- LOS 21
-- Magisk 28.1
-- 2.5.0
-- AAPT2
-```
-
 ## Support
 
-If you find this project useful, please consider [supporting](https://www.paypal.me/f3ff0) the developer's mental health :)
-Alternatively, you can contribute directly to the project. All support is appreciated!
+You can contribute pull requests or support the original author.
 
 ## Features
 
@@ -72,23 +45,11 @@ Alternatively, you can contribute directly to the project. All support is apprec
 
 - Works on any device running Android 8.0+ and Magisk 20.4+
 - Replace the webview with one of:
-    1. ~~[Bromite](https://github.com/bromite/bromite)~~ (Deprecated)
-    2. [Mulch](https://gitlab.com/divested-mobile/mulch)
+    1. ~~[Bromite](https://github.com/bromite/bromite)~~ (Deprecated, removed)
+    2. ~~[Mulch](https://gitlab.com/divested-mobile/mulch)~~ (Deprecated, removed)
     3. [Vanadium](https://gitlab.com/grapheneos/platform_external_vanadium)
     4. ~~[Thorium](https://github.com/Alex313031/Thorium-Android)~~ (Deprecated)
     5. [Cromite](https://github.com/uazo/cromite)
-
-### Why did I deprecate webview?
-
-In general because I no longer consider it adequate to my standard:
-- security reason
-- no more update for too long
-- no longer supported
-
-In my opinion a webview is a very important part of the system and I don't want to make the system vulnerable with an outdate webview
-
-- **Bromite** -> last update in **12/2022** (**Bromite**'s successor is **Cromite**)
-- **Thorium** -> I don't like the update policy, too long between two update
 
 ## Create module
 
@@ -99,6 +60,7 @@ In my opinion a webview is a very important part of the system and I don't want 
 
 ## Credits
 
+- [Upstream Open Webview by F3FFO](https://github.com/Magisk-Modules-Alt-Repo/open_webview/)
 - [Magisk by topjohnwu](https://github.com/topjohnwu/Magisk)
 - [MMT-Extended by Zackptg5](https://github.com/Zackptg5/MMT-Extended)
 - [Bromite](https://github.com/bromite/bromite)
