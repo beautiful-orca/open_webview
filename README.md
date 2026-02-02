@@ -9,7 +9,7 @@ This module helps you to replace your system webview though Magisk.
 
 >I AM NOT RESPONSIBLE IF YOUR DEVICE DOES NOT WORK PROPERLY OR FOR ANY DAMAGE THAT MAY OCCUR TO YOUR DEVICE. BEFORE USING THIS MODULE, PLEASE READ THE CODE. YOU WHO DECIDE TO INSTALL THIS MODULE ASSUMES ALL RESPONSIBILITY FOR ANY PROBLEMS.
 
-## Compatibility (by upstream)
+## Compatibility
 
 - S.O.:
     - minimum: Android 8+
@@ -17,7 +17,7 @@ This module helps you to replace your system webview though Magisk.
 - Magisk 20.4+
 - KernelSU 0.6+
 
-## Tested Device ROM (by upstream)
+## Device ROM
 
 | API | OS | ROM | version |
 |:---:|:--:|:---:|:-------:|
