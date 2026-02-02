@@ -1,5 +1,5 @@
 #!/system/bin/sh
-SKIP_INSTALLATION=0
+SKIP_INSTALLATION=1
 ANDROID_VANADIUM_VERSION=13
 OVERLAY_API=29
 OVERLAY_APK_FILE="WebviewOverlay.apk"
@@ -41,15 +41,7 @@ get_system_path_according_to_rom() {
 		echo "system/app"
 	fi
 }
-mulch() {
-	VW_APK_URL=https://gitlab.com/divested-mobile/mulch/-/raw/master/prebuilt/${ARCH}/webview.apk
-	VW_TRICHROME_APK_URL=""
-	VW_SHA=$(get_sha_gitlab_lfs "30111188" "prebuilt%2F${ARCH}%2Fwebview.apk/raw?ref=master")
-	VW_SYSTEM_PATH=$(get_system_path_according_to_rom)/MulchWebview
-	VW_PACKAGE="us.spotco.mulch_wv"
-	VW_OVERLAY_PACKAGE="us.spotco.WebviewOverlay"
-	OVERLAY_ZIP_FILE="mulch-overlay${OVERLAY_API}.zip"
-}
+
 vanadium() {
 	VW_APK_URL=https://gitlab.com/api/v4/projects/40905333/repository/files/prebuilt%2F${1}%2FTrichromeWebView.apk/raw?ref=${ANDROID_VANADIUM_VERSION}
 	VW_TRICHROME_APK_URL=https://gitlab.com/api/v4/projects/40905333/repository/files/prebuilt%2F${1}%2FTrichromeLibrary.apk/raw?ref=${ANDROID_VANADIUM_VERSION}
@@ -269,26 +261,15 @@ fi
 ui_print "  Choose between:"
 if [[ $IS64BIT ]]; then
 	if [[ $API -ge 29 ]] && [[ $API -lt 33 ]]; then
-		ui_print "    Mulch, Cromite"
+		ui_print "    Cromite"
 	elif [[ $API -ge 33 ]]; then
-		ui_print "    Mulch, Vanadium, Cromite"
-	else
-		ui_print "    Mulch"
+		ui_print "    Vanadium, Cromite"
 	fi
-else
-	ui_print "    Mulch"
 fi
 sleep 3
 ui_print ""
 ui_print "  Select: [Vol+ = yes, Vol- = no]"
 
-ui_print "  -> Mulch"
-if chooseport 3; then
-	echo "[$(date "+%H:%M:%S")] Select mulch" >>$LOG
-	mulch
-else
-	SKIP_INSTALLATION=1
-fi
 
 if [[ $IS64BIT ]]; then
 	if [[ $API -ge 33 ]] && [[ $SKIP_INSTALLATION -eq 1 ]]; then
@@ -333,17 +314,6 @@ if [[ $VW_PACKAGE == "cromite" ]]; then
 	download_file webview.apk $VW_APK_URL
 	su -c pm install --install-location 1 webview.apk  >&2
 else
-	if [[ $VW_PACKAGE == "us.spotco.mulch_wv" ]]; then
-		ui_print ""
-		ui_print "  Do you want this module to download and install the latest Mulch webview as a system app?"
-		ui_print ""
-		ui_print "  [Vol+ = Yes, download and install]"
-		ui_print "  [Vol- = No, minimal setup for manual installation]"
-		if ! chooseport 5; then
-			IS_MINIMAL_INSTALLATION=1
-		fi
-	fi
-
 	if [[ $IS_MINIMAL_INSTALLATION -eq 0 ]]; then
 		ui_print "  CPU architecture: ${ARCH}"
 		download_install_webview
