@@ -56,7 +56,7 @@ cromite() {
 	VW_APK_URL=https://github.com/uazo/cromite/releases/download/$(get_version_github "uazo/cromite" "${ARCH}_SystemWebView.apk")/${ARCH}_SystemWebView.apk
 	VW_TRICHROME_APK_URL=""
 	VW_SHA=""
-	VW_SYSTEM_PATH=""
+	VW_SYSTEM_PATH="$(get_system_path_according_to_rom)/CromiteWebview"
 	VW_PACKAGE="cromite"
 	VW_OVERLAY_PACKAGE=""
 	OVERLAY_ZIP_FILE=""
