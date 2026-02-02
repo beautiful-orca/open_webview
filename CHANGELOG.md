@@ -5,6 +5,7 @@
 - Removed depreceated Mulch option [commit](https://github.com/beautiful-orca/open_webview/commit/9252181a46e87d3da4a44bfbeb6f6462c7001d40)
 - Updated Readme
 - Fix cromite install [commit](https://github.com/beautiful-orca/open_webview/commit/db57aa2dcd753ce8048c70d796935b94076bf764) [commit](https://github.com/beautiful-orca/open_webview/commit/069f82b373630eda84805e68fd56949cee367f4c)
+- [Update Vanadium for Android 16 version 16-qpr2](https://github.com/beautiful-orca/open_webview/commit/7dfdd689e9cef9abf80581047a898bcbca5b92d4)
 
 # v2.5.2
 
