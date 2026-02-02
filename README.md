@@ -48,7 +48,7 @@ You can contribute pull requests or support the original author.
     1. ~~[Bromite](https://github.com/bromite/bromite)~~ (Deprecated, removed)
     2. ~~[Mulch](https://gitlab.com/divested-mobile/mulch)~~ (Deprecated, removed)
     3. [Vanadium](https://gitlab.com/grapheneos/platform_external_vanadium)
-    4. ~~[Thorium](https://github.com/Alex313031/Thorium-Android)~~ (Deprecated)
+    4. ~~[Thorium](https://github.com/Alex313031/Thorium-Android)~~ (Deprecated, removed)
     5. [Cromite](https://github.com/uazo/cromite)
 
 ## Create module
