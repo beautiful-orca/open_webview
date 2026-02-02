@@ -1,6 +1,12 @@
 **If you find this project useful, please consider [supporting](https://www.paypal.me/f3ff0) the developer's mental health :)**
 **Alternatively, you can contribute directly to the project. All support is appreciated!**
 
+# v2.5.3 (fork by beautiful-orca)
+
+- Updated Cromite apk URL [commit](https://github.com/beautiful-orca/open_webview/commit/66da7a3b56d8f89ba1c84ef8bef4f4c8049bf5a5)
+- Removed depreceated Mulch option [commit](https://github.com/beautiful-orca/open_webview/commit/9252181a46e87d3da4a44bfbeb6f6462c7001d40)
+- Updated Readme
+
 # v2.5.2
 
 - Prevent post-fs logic if Cromite is choosen as webview
