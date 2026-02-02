@@ -61,7 +61,7 @@ vanadium() {
 	OVERLAY_ZIP_FILE="vanadium-overlay${OVERLAY_API}.zip"
 }
 cromite() {
-	VW_APK_URL=https://github.com/uazo/cromite/releases/download/$(get_version_github "uazo/cromite" "${ARCH}_SystemWebView64.apk")/${ARCH}_SystemWebView64.apk
+	VW_APK_URL=https://github.com/uazo/cromite/releases/download/$(get_version_github "uazo/cromite" "${ARCH}_SystemWebView.apk")/${ARCH}_SystemWebView.apk
 	VW_TRICHROME_APK_URL=""
 	VW_SHA=""
 	VW_SYSTEM_PATH=""
