@@ -1,7 +1,6 @@
 #!/system/bin/sh
 webviews=(
     ".com.android.webview"
-    ".us.spotco.mulch_wv"
     ".app.vanadium.webview"
 )
 
