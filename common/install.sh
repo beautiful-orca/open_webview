@@ -283,7 +283,7 @@ if [[ $IS64BIT ]]; then
 		if chooseport 3; then
 			if [[ $ARCH = "arm64" ]]; then
 				echo "[$(date "+%H:%M:%S")] Select vanadium for arm64" >>$LOG
-				vanadium "arm64"
+				vanadium "arm64-multilib"
 			else
 				echo "[$(date "+%H:%M:%S")] Select vanadium for x86_64" >>$LOG
 				vanadium "x86_64"
