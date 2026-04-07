@@ -3,7 +3,7 @@
 This module helps you to replace your system webview though Magisk.
 
 ## NOTICE
-> This is a fork I created for myself. My work is not related to programming or Android developement, so check before installing. It's just a hobby that I do when I have some free time (very little). The original author [F3FFO](https://github.com/F3FFO) is far knowledgeable.
+> This is a fork I created for myself. My profession is not related to programming or Android developement, so check before installing. It's just a hobby that I do when I have some free time (very little). The original author [F3FFO](https://github.com/F3FFO) is far knowledgeable.
 
 ## DISCLAIMER
 
@@ -82,8 +82,4 @@ The source code is available under [GPL-3.0](https://github.com/Magisk-Modules-A
 
 ## Change logs
 
-### v2.5.2 (see 2.5.0 changelog for more)
-
-- Prevent post-fs logic if Cromite is choosen as webview
-
-See older release notes: [CHANGELOG.md](CHANGELOG.md)
+See: [CHANGELOG.md](CHANGELOG.md)
