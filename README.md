@@ -47,9 +47,9 @@ You can contribute pull requests or support the original author.
 - Replace the webview with one of:
     1. ~~[Bromite](https://github.com/bromite/bromite)~~ (Deprecated, removed)
     2. ~~[Mulch](https://gitlab.com/divested-mobile/mulch)~~ (Deprecated, removed)
-    3. [Vanadium](https://gitlab.com/grapheneos/platform_external_vanadium)
+    3. [Vanadium](https://gitlab.com/grapheneos/platform_external_vanadium) (frequent chromium updates)
     4. ~~[Thorium](https://github.com/Alex313031/Thorium-Android)~~ (Deprecated, removed)
-    5. [Cromite](https://github.com/uazo/cromite)
+    5. [Cromite](https://github.com/uazo/cromite) (last updated May 21 2026, v148.0.7778.168, old chromium version may be a security risk)
 
 ## Create module
 
