@@ -2,6 +2,10 @@
 
 This module helps you to replace your system webview though Magisk.
 
+> [!NOTE]
+> 26/07: Cromite is currently not updated fast enough or at all. This means the only up-to-date option is Vanadium.  
+> So basicly this project (open_webview) has no advantage above [webview-changer by Lordify on GitLab](https://gitlab.com/Lordify/webview-changer), which is actively developed and is kept up to date.  
+
 ## NOTICE
 > This is a fork I created for myself. My profession is not related to programming or Android developement, so check before installing. It's just a hobby that I do when I have some free time (very little). The original author [F3FFO](https://github.com/F3FFO) is far knowledgeable.
 
