@@ -252,16 +252,7 @@ fi
 
 # To get the latest Vanadium version change ANDROID_VANADIUM_VERSION to the current version of https://gitlab.com/grapheneos/platform_external_vanadium
 # Check the URL of the prebuilt folder, eg. https://gitlab.com/grapheneos/platform_external_vanadium/-/tree/16-qpr2/prebuilt?ref_type=heads, 16-qpr2 is latest version
-
-if [[ $API -eq 33 ]]; then
-	ANDROID_VANADIUM_VERSION=13
-elif [[ $API -eq 34 ]]; then
-	ANDROID_VANADIUM_VERSION=14
-elif [[ $API -eq 35 ]]; then
-	ANDROID_VANADIUM_VERSION=15
-elif [[ $API -eq 36 ]]; then
-	ANDROID_VANADIUM_VERSION=16-qpr2
-fi
+ANDROID_VANADIUM_VERSION=17
 
 ui_print "  Choose between:"
 if [[ $IS64BIT ]]; then
