@@ -1,4 +1,9 @@
 
+# v2.5.5 (fork by beautiful-orca)
+- [added notice for old cromite version](https://github.com/beautiful-orca/open_webview/commit/4fd902750ad62cbcbd6f9737bb44eea161a7470e)
+- [Updated Vanadium: Branch changed from 16-QPR2 to 17](https://github.com/beautiful-orca/open_webview/commit/5c96a2f6e8a2744f36dbfcd248475a4c4458d46f)
+- mention [webview-changer](https://gitlab.com/Lordify/webview-changer) as a better alternative [commit](https://github.com/beautiful-orca/open_webview/commit/11a675aaaa8f16705c9c97684b3c3c3001bc8dfb)
+
 
 # v2.5.4 (fork by beautiful-orca)
 
