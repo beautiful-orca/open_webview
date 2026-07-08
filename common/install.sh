@@ -1,6 +1,8 @@
 #!/system/bin/sh
 SKIP_INSTALLATION=1
-ANDROID_VANADIUM_VERSION=13
+# To get the latest Vanadium version change ANDROID_VANADIUM_VERSION to the current version of https://gitlab.com/grapheneos/platform_external_vanadium
+# Check the URL of the prebuilt folder, eg. https://gitlab.com/grapheneos/platform_external_vanadium/-/tree/16-qpr2/prebuilt?ref_type=heads, 16-qpr2 is latest version
+ANDROID_VANADIUM_VERSION=17
 OVERLAY_API=29
 OVERLAY_APK_FILE="WebviewOverlay.apk"
 IS_REINSTALL=0
@@ -249,10 +251,6 @@ fi
 if [[ $API -lt 29 ]]; then
 	OVERLAY_API=28
 fi
-
-# To get the latest Vanadium version change ANDROID_VANADIUM_VERSION to the current version of https://gitlab.com/grapheneos/platform_external_vanadium
-# Check the URL of the prebuilt folder, eg. https://gitlab.com/grapheneos/platform_external_vanadium/-/tree/16-qpr2/prebuilt?ref_type=heads, 16-qpr2 is latest version
-ANDROID_VANADIUM_VERSION=17
 
 ui_print "  Choose between:"
 if [[ $IS64BIT ]]; then
