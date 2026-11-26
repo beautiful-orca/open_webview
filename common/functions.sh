@@ -204,6 +204,13 @@ ui_print "  Initialization..."
 CURL_BIN="$MODPATH/common/tools/$ARCH/curl"
 # permission
 chmod -R 0755 "$MODPATH/common/tools/$ARCH"
+# Smoke test, right after extraction and before the first download: one run
+# of curl --version turns a confusing download failure (missing binary,
+# wrong arch, shadowed library) into a clear error.
+if ! "$CURL_BIN" --version >/dev/null 2>&1; then
+  ui_print "  !!! Bundled curl for $ARCH failed to run !!!"
+  abort "curl smoke test failed"
+fi
 ui_print "  Initialization finished."
 
 # Run addons
