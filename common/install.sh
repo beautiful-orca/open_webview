@@ -1,7 +1,8 @@
 #!/system/bin/sh
-# To get the latest Vanadium version change ANDROID_VANADIUM_VERSION to the current version of https://gitlab.com/grapheneos/platform_external_vanadium
-# Check the URL of the prebuilt folder, eg. https://gitlab.com/grapheneos/platform_external_vanadium/-/tree/16-qpr2/prebuilt?ref_type=heads, 16-qpr2 is latest version
-ANDROID_VANADIUM_VERSION=17
+# The provider registry (PROVIDERS, available_providers), the download helpers
+# (dl, sha256_of, get_sha_gitlab*) and the upstream resolution
+# (provider_url, provider_sha, cromite_latest) live in providers.sh at the
+# module root, shared with action.sh. ANDROID_VANADIUM_VERSION is set there.
 OVERLAY_APK_FILE="WebviewOverlay.apk"
 CONFIG_FILE="$MODPATH"/.webview
 LOG="$MODPATH"/webview.log
@@ -10,64 +11,11 @@ LOG="$MODPATH"/webview.log
 DL_DIR=/data/local/tmp/open_webview
 IS_MINIMAL_INSTALLATION=0
 
-# id | label | min_api | arch:variant ...
-# Order is the menu order; the first entry is the default when nobody answers.
-# Keys are $ARCH after the x64->x86_64 normalisation in customize.sh, i.e. ABI
-# names. The variant is provider-specific: Vanadium's is a prebuilt directory,
-# Cromite's is a release asset filename.
-PROVIDERS='
-vanadium|Vanadium|29|arm64:arm64-multilib x86_64:x86_64
-cromite|Cromite|29|arm64:arm64_SystemWebView.apk
-'
+# CURL_BIN is set by functions.sh to $MODPATH/bin/curl before this file is
+# sourced, so the helpers below resolve through the same copy action.sh uses.
+. "$MODPATH/providers.sh"
+
 MENU_TIMEOUT=15
-
-get_version_github() {
-	local repo=$1
-    local asset_name=$2
-
-	echo "[$(date "+%H:%M:%S")] Get correct github versione using repo=${repo} and asset_name=${asset_name}" >>$LOG
-
-	"$CURL_BIN" -fsSL --connect-timeout 15 --max-time 60 --retry 3 --retry-delay 3 \
-		"https://api.github.com/repos/$repo/releases" | \
-    awk -v asset_name="$asset_name" '
-        BEGIN { tag_name = "" }
-        /"tag_name":/ { tag_name = $2; gsub(/"|,/, "", tag_name) }
-        /"name":/ { name = $2; gsub(/"|,/, "", name) }
-        name == asset_name { print tag_name; exit }
-    '
-}
-get_sha_gitlab_lfs() {
-	"$CURL_BIN" -fsSL --connect-timeout 15 --max-time 60 --retry 3 --retry-delay 3 \
-		"https://gitlab.com/api/v4/projects/$1/repository/files/$2" 2>/dev/null |
-		grep 'oid sha256:' |
-		cut -d":" -f2
-}
-get_sha_gitlab() {
-	# Read only the JSON prefix that holds the hash: the files API returns the
-	# whole file base64-encoded (374 MB for a 281 MB APK), and content_sha256
-	# sits at byte ~130, so 4 KB is ample headroom. The old
-	# grep 'content_sha256:' never matched — the JSON is
-	# "content_sha256":"…", with a quote before the colon.
-	"$CURL_BIN" -fsSL --connect-timeout 15 --max-time 60 --retry 3 --retry-delay 3 \
-		"https://gitlab.com/api/v4/projects/$1/repository/files/$2" 2>/dev/null |
-		head -c 4096 |
-		grep -o '"content_sha256":"[a-f0-9]*' | cut -d'"' -f4
-}
-# Prints "id|label|variant" for every provider this device can run, in registry order.
-available_providers() {
-	local id label min_api variants v
-	while IFS='|' read -r id label min_api variants; do
-		[ -z "$id" ] && continue
-		[[ $API -ge $min_api ]] || continue
-		for v in $variants; do
-			case $v in
-			"$ARCH":*) echo "$id|$label|${v#*:}" ;;
-			esac
-		done
-	done <<EOF
-$PROVIDERS
-EOF
-}
 
 # Vanadium publishes two arm64 prebuilts: `arm64` (189,406,104 B) and
 # `arm64-multilib` (281,009,321 B). The multilib one carries armeabi-v7a
@@ -93,9 +41,9 @@ vanadium() {
 		prebuilt=$(vanadium_abi)
 	fi
 	VW_VARIANT=$prebuilt
-	VW_APK_URL=https://gitlab.com/api/v4/projects/40905333/repository/files/prebuilt%2F${prebuilt}%2FVanadiumWebView.apk/raw?ref=${ANDROID_VANADIUM_VERSION}
+	VW_APK_URL=$(provider_url vanadium "$prebuilt")
 	VW_TRICHROME_APK_URL=""
-	VW_SHA=$(get_sha_gitlab "40905333" "prebuilt%2F${prebuilt}%2FVanadiumWebView.apk?ref=${ANDROID_VANADIUM_VERSION}")
+	VW_SHA=$(provider_sha vanadium "$prebuilt")
 	if [[ -z $VW_SHA ]]; then
 		echo "[$(date "+%H:%M:%S")] No content_sha256 for prebuilt/${prebuilt}/VanadiumWebView.apk" >>$LOG
 		ui_print "  Could not fetch the Vanadium checksum."
@@ -119,9 +67,21 @@ cromite() {
 		ui_print "  Internal error: no Cromite asset for this device."
 		clean_up 1
 	fi
-	VW_APK_URL=https://github.com/uazo/cromite/releases/download/$(get_version_github "uazo/cromite" "$asset_name")/$asset_name
+	VW_VARIANT=$asset_name
+	# One releases/latest call resolves both the tag and the asset digest.
+	VW_APK_URL=$(provider_url cromite "$asset_name") || {
+		echo "[$(date "+%H:%M:%S")] Could not resolve the latest Cromite release" >>$LOG
+		ui_print "  Could not resolve the latest Cromite release."
+		clean_up 1
+	}
 	VW_TRICHROME_APK_URL=""
-	VW_SHA=""
+	VW_SHA=$(provider_sha cromite "$asset_name")
+	if [[ -z $VW_SHA ]]; then
+		echo "[$(date "+%H:%M:%S")] No sha256 digest for $asset_name in the latest Cromite release" >>$LOG
+		ui_print "  Could not fetch the Cromite checksum."
+		ui_print "  Refusing to install an unverified WebView."
+		clean_up 1
+	fi
 	VW_SYSTEM_PATH=system/app/CromiteWebview
 	VW_PACKAGE="com.android.webview"
 	OVERLAY_APK_FILE=""
@@ -159,24 +119,10 @@ download_file() {
 	echo "[$(date "+%H:%M:%S")] Downloading file: $1 from source: $2" >>$LOG
 
 	local out="$DL_DIR/$1"
-	local base="--connect-timeout 15 --max-time 1800 --retry 5 --retry-delay 3 --retry-connrefused -fsSL"
-	local dns_flag ok=0
-	rm -f "$out"
-	# Download ladder: direct DNS to a public resolver first (bionic's
-	# getaddrinfo goes through netd's dnsproxyd, which refuses non-app UIDs),
-	# then DoH over TCP:443, then the system resolver. Per-attempt flags,
-	# because $CURL_BIN carries no alias any more. --retry-all-errors is
-	# deliberately absent: it would retry a 404.
-	for dns_flag in "--dns-servers 1.1.1.1,1.0.0.1" "--doh-url https://1.1.1.1/dns-query" ""; do
-		# Test curl's exit status, not the output file: an interrupted transfer
-		# leaves a partial file behind, and both -f and -s accept it.
-		if "$CURL_BIN" $base $dns_flag "$2" -o "$out"; then
-			ok=1
-			break
-		fi
-		rm -f "$out"
-	done
-	if [[ $ok -ne 1 ]]; then
+	# The DNS ladder lives in dl() (providers.sh), shared with action.sh. It
+	# tests curl's exit status, not the output file: an interrupted transfer
+	# leaves a partial file behind, and both -f and -s accept it.
+	if ! dl "$2" "$out"; then
 		echo "[$(date "+%H:%M:%S")] Download failed" >>$LOG
 		ui_print ""
 		ui_print "  !!! Download failed !!!"
@@ -200,18 +146,7 @@ download_file() {
 	chmod 0644 "$out"
 	echo "[$(date "+%H:%M:%S")] File downloaded: $out" >>$LOG
 }
-# sha256sum is a busybox applet, so it is on PATH in the installer under Magisk,
-# KernelSU and APatch. /sbin only exists up to Android 10: from Android 11 Magisk
-# mounts its tmpfs at /debug_ramdisk, so the old /sbin probe always missed.
-sha256_of() {
-	if command -v sha256sum >/dev/null 2>&1; then
-		sha256sum "$1"
-	elif [ -x "$MAGISKTMP/busybox" ]; then
-		"$MAGISKTMP/busybox" sha256sum "$1"
-	else
-		return 1
-	fi
-}
+# sha256_of() lives in providers.sh, shared with action.sh.
 check_integrity() {
 	local file=$1 expected=$2 calculated
 
