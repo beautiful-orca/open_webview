@@ -33,7 +33,12 @@ jobs:
       - name: Verify
         run: |
           set -e
-          apksigner verify --print-certs /tmp/rebuilt.apk
+          # The overlay manifest declares no uses-sdk, so a bare `apksigner verify`
+          # checks the v1 JAR signature against API 9-17, where SHA-256+RSA is not
+          # supported — the run fails with "DOES NOT VERIFY". MINAPI=29 is the
+          # module's floor (customize.sh aborts below it), so verify for the range
+          # the module actually installs on.
+          apksigner verify --min-sdk-version 29 --verbose --print-certs /tmp/rebuilt.apk
           aapt2 dump badging /tmp/rebuilt.apk
 
       # The signed APK is not byte-reproducible (§12.12), so a byte diff would open a PR
