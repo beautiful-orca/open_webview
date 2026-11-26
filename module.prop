@@ -1,7 +1,7 @@
 id=open_webview
 name=Open Webview
-version=2.5.5
-versionCode=255
+version=v2.6.0
+versionCode=260
 author=beautiful-orca
 description=Open Webview install vanadium or cromite system webview
 minMagisk=20400
