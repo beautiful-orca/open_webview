@@ -44,9 +44,9 @@ get_system_path_according_to_rom() {
 }
 
 vanadium() {
-	VW_APK_URL=https://gitlab.com/api/v4/projects/40905333/repository/files/prebuilt%2F${1}%2FTrichromeWebView.apk/raw?ref=${ANDROID_VANADIUM_VERSION}
-	VW_TRICHROME_APK_URL=https://gitlab.com/api/v4/projects/40905333/repository/files/prebuilt%2F${1}%2FTrichromeLibrary.apk/raw?ref=${ANDROID_VANADIUM_VERSION}
-	# VW_SHA=$(get_sha_gitlab "40905333" "prebuilt%2F${1}%2FTrichromeWebView.apk?ref=${ANDROID_VANADIUM_VERSION}")
+	VW_APK_URL=https://gitlab.com/api/v4/projects/40905333/repository/files/prebuilt%2F${1}%2FVanadiumWebView.apk/raw?ref=${ANDROID_VANADIUM_VERSION}
+	VW_TRICHROME_APK_URL=""
+	# VW_SHA=$(get_sha_gitlab "40905333" "prebuilt%2F${1}%2FVanadiumWebView.apk?ref=${ANDROID_VANADIUM_VERSION}")
 	VW_SHA=""
 	VW_SYSTEM_PATH=$(get_system_path_according_to_rom)/VanadiumWebview
 	VW_PACKAGE="app.vanadium.webview"
@@ -54,11 +54,20 @@ vanadium() {
 	OVERLAY_APK_FILE="WebviewOverlay.apk"
 }
 cromite() {
-	VW_APK_URL=https://github.com/uazo/cromite/releases/download/$(get_version_github "uazo/cromite" "${ARCH}_SystemWebView.apk")/${ARCH}_SystemWebView.apk
+	# Cromite publishes arm64_SystemWebView.apk only: arm, x86 and x86_64 releases
+	# carry ChromePublic.apk, which is a browser, not a WebView provider.
+	if [[ $ARCH != "arm64" ]]; then
+		echo "[$(date \"+%H:%M:%S\")] Cromite webview is arm64 only, arch is: $ARCH" >>$LOG
+		ui_print "  Cromite only publishes an arm64 WebView."
+		ui_print "  Your architecture is $ARCH."
+		clean_up 1
+	fi
+	local asset_name="arm64_SystemWebView.apk"
+	VW_APK_URL=https://github.com/uazo/cromite/releases/download/$(get_version_github "uazo/cromite" "$asset_name")/$asset_name
 	VW_TRICHROME_APK_URL=""
 	VW_SHA=""
 	VW_SYSTEM_PATH="$(get_system_path_according_to_rom)/CromiteWebview"
-	VW_PACKAGE="cromite"
+	VW_PACKAGE="com.android.webview"
 	VW_OVERLAY_PACKAGE=""
 	OVERLAY_APK_FILE=""
 }
@@ -133,7 +142,9 @@ install_webview() {
 	ui_print "  Installing webview..."
 	mktouch "$MODPATH"/$VW_SYSTEM_PATH/.replace
 	copy_webview_file
-	su -c pm install --install-location 1 trichrome.apk  >&2
+	if [[ -f "$TMPDIR"/trichrome.apk ]]; then
+		su -c pm install --install-location 1 "$TMPDIR"/trichrome.apk >&2
+	fi
 	mkdir -p "$TMPDIR"/webview
 	unzip -qo "$TMPDIR"/webview.zip -d "$TMPDIR"/webview >&2
 	extract_lib
