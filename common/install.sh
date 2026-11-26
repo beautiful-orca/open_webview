@@ -14,7 +14,8 @@ get_version_github() {
 
 	echo "[$(date "+%H:%M:%S")] Get correct github versione using repo=${repo} and asset_name=${asset_name}" >>$LOG
 
-	curl -s "https://api.github.com/repos/$repo/releases" | \
+	"$CURL_BIN" -fsSL --connect-timeout 15 --max-time 60 --retry 3 --retry-delay 3 \
+		"https://api.github.com/repos/$repo/releases" | \
     awk -v asset_name="$asset_name" '
         BEGIN { tag_name = "" }
         /"tag_name":/ { tag_name = $2; gsub(/"|,/, "", tag_name) }
@@ -23,12 +24,14 @@ get_version_github() {
     '
 }
 get_sha_gitlab_lfs() {
-	curl -kLs "https://gitlab.com/api/v4/projects/$1/repository/files/$2" |
+	"$CURL_BIN" -fsSL --connect-timeout 15 --max-time 60 --retry 3 --retry-delay 3 \
+		"https://gitlab.com/api/v4/projects/$1/repository/files/$2" 2>/dev/null |
 		grep 'oid sha256:' |
 		cut -d":" -f2
 }
 get_sha_gitlab() {
-	curl -kLs "https://gitlab.com/api/v4/projects/$1/repository/files/$2" |
+	"$CURL_BIN" -fsSL --connect-timeout 15 --max-time 60 --retry 3 --retry-delay 3 \
+		"https://gitlab.com/api/v4/projects/$1/repository/files/$2" 2>/dev/null |
 		grep 'content_sha256:' |
 		cut -d":" -f2
 }
@@ -72,16 +75,45 @@ download_file() {
 	ui_print "  Downloading $1..."
 	echo "[$(date "+%H:%M:%S")] Downloading file: $1 from source: $2" >>$LOG
 
-	curl -skLf "$2" -o "$TMPDIR"/$1
-
-	if [[ ! -f "$TMPDIR"/$1 ]]; then
-		echo "[$(date "+%H:%M:%S")] Dowload failed" >>$LOG
+	local out="$TMPDIR/$1"
+	local base="--connect-timeout 15 --max-time 1800 --retry 5 --retry-delay 3 --retry-connrefused -fsSL"
+	local dns_flag ok=0
+	rm -f "$out"
+	# Download ladder: direct DNS to a public resolver first (bionic's
+	# getaddrinfo goes through netd's dnsproxyd, which refuses non-app UIDs),
+	# then DoH over TCP:443, then the system resolver. Per-attempt flags,
+	# because $CURL_BIN carries no alias any more. --retry-all-errors is
+	# deliberately absent: it would retry a 404.
+	for dns_flag in "--dns-servers 1.1.1.1,1.0.0.1" "--doh-url https://1.1.1.1/dns-query" ""; do
+		# Test curl's exit status, not the output file: an interrupted transfer
+		# leaves a partial file behind, and both -f and -s accept it.
+		if "$CURL_BIN" $base $dns_flag "$2" -o "$out"; then
+			ok=1
+			break
+		fi
+		rm -f "$out"
+	done
+	if [[ $ok -ne 1 ]]; then
+		echo "[$(date "+%H:%M:%S")] Download failed" >>$LOG
 		ui_print ""
-		ui_print "  !!! Dowload failed !!!"
+		ui_print "  !!! Download failed !!!"
 		ui_print ""
 		clean_up 1
 	fi
-	echo "[$(date "+%H:%M:%S")] File downloaded: $TMPDIR/$1" >>$LOG
+
+	# A finished transfer can still be a broken file: a captive portal or proxy
+	# error page answers 200 with HTML, and a truncated zip has no central
+	# directory. unzip -t rejects both, and needs no extra binary.
+	ui_print "  Verifying download..."
+	if ! unzip -t "$out" >/dev/null 2>&1; then
+		rm -f "$out"
+		echo "[$(date "+%H:%M:%S")] Downloaded file is not a valid zip" >>$LOG
+		ui_print ""
+		ui_print "  !!! Downloaded file is not a valid APK !!!"
+		ui_print ""
+		clean_up 1
+	fi
+	echo "[$(date "+%H:%M:%S")] File downloaded: $out" >>$LOG
 }
 check_integrity() {
 	if [ -f "/sbin/sha256sum" ]; then

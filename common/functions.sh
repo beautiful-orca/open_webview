@@ -188,9 +188,10 @@ unzip -o "$ZIPFILE" -x 'META-INF/*' 'common/functions.sh' -d $MODPATH >&2
 # Custom setup
 # extract extra tools
 [ -f "$MODPATH/common/tools/tools.tar.xz" ] && tar -xvf $MODPATH/common/tools/tools.tar.xz -C $MODPATH/common/tools >/dev/null
-# alias
+# curl binary: a variable, not an alias, so the download ladder in install.sh
+# can pass per-attempt DNS flags and the call stays testable off-device.
 ui_print "  Initialization..."
-alias curl='$MODPATH/common/tools/$ARCH/curl --dns-servers 1.1.1.1,1.0.0.1'
+CURL_BIN="$MODPATH/common/tools/$ARCH/curl"
 # permission
 chmod -R 0755 "$MODPATH/common/tools/$ARCH"
 ui_print "  Initialization finished."
