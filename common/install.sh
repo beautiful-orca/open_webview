@@ -4,7 +4,6 @@ SKIP_INSTALLATION=1
 # Check the URL of the prebuilt folder, eg. https://gitlab.com/grapheneos/platform_external_vanadium/-/tree/16-qpr2/prebuilt?ref_type=heads, 16-qpr2 is latest version
 ANDROID_VANADIUM_VERSION=17
 OVERLAY_APK_FILE="WebviewOverlay.apk"
-IS_REINSTALL=0
 CONFIG_FILE="$MODPATH"/.webview
 LOG="$MODPATH"/webview.log
 IS_MINIMAL_INSTALLATION=0
@@ -50,7 +49,6 @@ vanadium() {
 	VW_SHA=""
 	VW_SYSTEM_PATH=$(get_system_path_according_to_rom)/VanadiumWebview
 	VW_PACKAGE="app.vanadium.webview"
-	VW_OVERLAY_PACKAGE="app.vanadium.WebviewOverlay"
 	OVERLAY_APK_FILE="WebviewOverlay.apk"
 }
 cromite() {
@@ -68,7 +66,6 @@ cromite() {
 	VW_SHA=""
 	VW_SYSTEM_PATH="$(get_system_path_according_to_rom)/CromiteWebview"
 	VW_PACKAGE="com.android.webview"
-	VW_OVERLAY_PACKAGE=""
 	OVERLAY_APK_FILE=""
 }
 download_file() {
@@ -202,12 +199,9 @@ force_overlay() {
 	fi
 }
 create_config_file() {
-	echo "IS_REINSTALL=${IS_REINSTALL}" >>$CONFIG_FILE
-	echo "RESET=1" >>$CONFIG_FILE
-	echo "OVERLAY_PATH=${OVERLAY_PATH}" >>$CONFIG_FILE
-	echo "OVERLAY_APK_FILE=${OVERLAY_APK_FILE}" >>$CONFIG_FILE
+	# The old RESET/IS_REINSTALL/OVERLAY_PATH/OVERLAY_APK_FILE/VW_OVERLAY_PACKAGE
+	# keys were only read by post-fs-data.sh, which no longer ships.
 	echo "VW_PACKAGE=${VW_PACKAGE}" >>$CONFIG_FILE
-	echo "VW_OVERLAY_PACKAGE=${VW_OVERLAY_PACKAGE}" >>$CONFIG_FILE
 }
 clean_up() {
 	if [[ $1 -eq 1 ]]; then
@@ -218,8 +212,6 @@ clean_up() {
 	fi
 
 	ui_print "  Cleaning up..."
-	ui_print "  !!! Dalvik cache will be cleared next boot."
-	ui_print "  !!! Boot time may be longer."
 	echo "[$(date "+%H:%M:%S")] Installation success" >>$LOG
 }
 
@@ -295,7 +287,6 @@ fi
 if [[ -f $CONFIG_FILE ]]; then
 	echo "[$(date "+%H:%M:%S")] Remove old config file" >>$LOG
 	rm -rf $CONFIG_FILE
-	IS_REINSTALL=1
 fi
 
 if [[ $IS_MINIMAL_INSTALLATION -eq 0 ]]; then
