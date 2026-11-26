@@ -1,4 +1,9 @@
 
+# v2.6.3 (fork by beautiful-orca)
+
+- README: License section now links this fork's own LICENSE (stale "Copyright 2024 F3FFO" line removed), curl fork attribution clarified in the automation and credits sections [cc98e4f](https://github.com/beautiful-orca/open_webview/commit/cc98e4f3936d167508ffb2a579946419e0d03cd0)
+- Release v2.6.3: version bumped in `module.prop` and `update.json` [0820517](https://github.com/beautiful-orca/open_webview/commit/082051703b259a67e428e8c0effb06b3469560ae)
+
 # v2.6.2 (fork by beautiful-orca)
 
 - Installer ends with a success summary (reboot required, WebView picker in Developer options, action-button updates); `NVBASE` defaults to `/data/adb` on modern Magisk [09c708b](https://github.com/beautiful-orca/open_webview/commit/09c708b109204e6fb3932aecfe1710f69046f202)
