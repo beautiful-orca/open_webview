@@ -36,7 +36,9 @@ REPLACE="
 ##########################################################################################
 
 set_permissions() {
-  :  # Remove this if adding to this function
+  # bin/curl is the update button's curl (action.sh); set_perm_recursive in
+  # functions.sh leaves it at 0644.
+  set_perm $MODPATH/bin/curl 0 0 0755
 
   # Note that all files/folders in magisk module directory have the $MODPATH prefix - keep this prefix on all of your files/folders
   # Some examples:

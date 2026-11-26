@@ -211,6 +211,14 @@ if ! "$CURL_BIN" --version >/dev/null 2>&1; then
   ui_print "  !!! Bundled curl for $ARCH failed to run !!!"
   abort "curl smoke test failed"
 fi
+# The update button (action.sh) runs without $ARCH and only after cleanup()
+# has removed common/, so the target arch's curl is copied to a fixed path
+# and CURL_BIN points at the copy from here on. common/tools/$ARCH/ stays the
+# canonical location; bin/curl is the artifact for the update path.
+mkdir -p "$MODPATH/bin"
+cp -f "$CURL_BIN" "$MODPATH/bin/curl"
+chmod 0755 "$MODPATH/bin/curl"
+CURL_BIN="$MODPATH/bin/curl"
 ui_print "  Initialization finished."
 
 # Run addons

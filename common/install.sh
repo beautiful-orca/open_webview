@@ -68,12 +68,15 @@ cromite() {
 		clean_up 1
 	fi
 	VW_VARIANT=$asset_name
-	# One releases/latest call resolves both the tag and the asset digest.
-	VW_APK_URL=$(provider_url cromite "$asset_name") || {
+	# One releases/latest call resolves both the tag and the asset digest;
+	# prefetch in this shell so the two command substitutions below hit the
+	# cromite_latest cache instead of paying the API call twice.
+	provider_prefetch cromite "$asset_name" || {
 		echo "[$(date "+%H:%M:%S")] Could not resolve the latest Cromite release" >>$LOG
 		ui_print "  Could not resolve the latest Cromite release."
 		clean_up 1
 	}
+	VW_APK_URL=$(provider_url cromite "$asset_name")
 	VW_TRICHROME_APK_URL=""
 	VW_SHA=$(provider_sha cromite "$asset_name")
 	if [[ -z $VW_SHA ]]; then
@@ -294,9 +297,20 @@ force_overlay() {
 	cp_ch "$MODPATH"/common/$OVERLAY_APK_FILE "$MODPATH"/$OVERLAY_PATH
 }
 create_config_file() {
-	# The old RESET/IS_REINSTALL/OVERLAY_PATH/OVERLAY_APK_FILE/VW_OVERLAY_PACKAGE
-	# keys were only read by post-fs-data.sh, which no longer ships.
+	# State for the update button (action.sh): provider+variant select the
+	# upstream asset, the installed hash is the comparison key, the version is
+	# display only. The old RESET/IS_REINSTALL/OVERLAY_PATH/OVERLAY_APK_FILE/
+	# VW_OVERLAY_PACKAGE keys were only read by post-fs-data.sh, which no
+	# longer ships. dumpsys sees the provider package only once the module's
+	# system copy is mounted at next boot, so on a fresh install VW_VERSION
+	# stays empty and action.sh fills it in on the first update.
+	VW_VERSION=$(dumpsys package "$VW_PACKAGE" 2>/dev/null |
+		sed -n 's/.*versionName=\([^ ]*\).*/\1/p' | head -n1)
+	echo "VW_PROVIDER=${VW_PROVIDER}" >>$CONFIG_FILE
+	echo "VW_VARIANT=${VW_VARIANT}" >>$CONFIG_FILE
 	echo "VW_PACKAGE=${VW_PACKAGE}" >>$CONFIG_FILE
+	echo "VW_SHA_INSTALLED=${VW_SHA}" >>$CONFIG_FILE
+	echo "VW_VERSION=${VW_VERSION}" >>$CONFIG_FILE
 }
 clean_up() {
 	if [[ $1 -eq 1 ]]; then

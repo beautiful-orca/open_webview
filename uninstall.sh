@@ -2,6 +2,9 @@
 # Idempotent: every step is safe to run twice and on a device that never had
 # the module installed.
 
+# The package this module installed, recorded in .webview at install time.
+VW_PACKAGE=$(sed -n 's/^VW_PACKAGE=//p' "$MODPATH/.webview" 2>/dev/null | head -n1)
+
 # The WebView cleanup runs in a background subshell after boot completes:
 # pm path needs PackageManager up, and system_server owns overlays.xml.
 (
@@ -9,6 +12,14 @@
   # the property becomes 1; waiting on 0 returns immediately because the
   # property is unset during boot (§14.7).
   resetprop -w sys.boot_completed 1 2>/dev/null
+
+  # Remove the /data/app update the update button (action.sh) may have
+  # installed. No --user flag: without it pm defaults to USER_ALL, which
+  # removes the update and restores the system copy; --user 0 would instead
+  # set DELETE_SYSTEM_APP and merely disable the package for that user. Without
+  # this, Cromite's data app keeps overriding the stock WebView this module
+  # restores, and Vanadium's becomes dead weight once the overlay is gone.
+  [ -n "$VW_PACKAGE" ] && pm uninstall "$VW_PACKAGE" >/dev/null 2>&1
 
   # Remove the /data/app updates and data dirs of the providers this module
   # can install. pm path is authoritative — the old find with a leading-dot

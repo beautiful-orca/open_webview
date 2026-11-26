@@ -12,6 +12,10 @@
 ANDROID_VANADIUM_VERSION=17
 GITLAB_VANADIUM=40905333
 
+# Cache for cromite_latest(); empty until the first releases/latest call.
+CROMITE_TAG=""
+CROMITE_SHA=""
+
 # id | label | min_api | arch:variant ...
 # Order is the menu order; the first entry is the default when nobody answers.
 # Keys are $ARCH after the x64->x86_64 normalisation in customize.sh, i.e. ABI
@@ -109,6 +113,15 @@ cromite_latest() {
 			if (n == want) { print d; exit }
 		}')
 	[ ${#CROMITE_SHA} -eq 64 ]
+}
+
+# Warm the upstream cache in the caller's shell. Callers resolve url/sha
+# through command substitution, which forks — without this, provider_url and
+# provider_sha would each pay the API call again.
+provider_prefetch() {
+	case $1 in
+	cromite) cromite_latest "$2" || return 1 ;;
+	esac
 }
 
 # The upstream download URL for a provider's variant. Returns 1 when the
