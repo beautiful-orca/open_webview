@@ -1,13 +1,16 @@
 # Fork of Open WebView - [XDA Thread](https://xdaforums.com/t/magisk-module-webview-open-webview.4496119/)
 
-This module helps you to replace your system webview though Magisk.
+This module replaces your system WebView systemlessly with Magisk.
 
 > [!NOTE]
-> 26/07: Cromite is currently not updated fast enough or at all. This means the only up-to-date option is Vanadium.  
-> So basicly this project (open_webview) has no advantage above [webview-changer by Lordify on GitLab](https://gitlab.com/Lordify/webview-changer), which is actively developed and is kept up to date.  
+> 26/11: Cromite is currently not updated fast enough (last release: Sep 15 2026, v153.0.8010.37 — an old Chromium version may be a security risk).  
+> Vanadium and Thorium are the up-to-date options: the module tracks their current upstream branch/release, and the action button updates the installed WebView without re-flashing.  
+> **Attention:** the module is now developed with the help of AI — read and verify the code yourself before installing.
 
 ## NOTICE
-> This is a fork I created for myself. My profession is not related to programming or Android developement, so check before installing. It's just a hobby that I do when I have some free time (very little). The original author [F3FFO](https://github.com/F3FFO) is far knowledgeable.
+> This is a fork I created for myself. I don't work in programming or Android development, so check the code before installing.
+>
+> Recent changes are AI-assisted. Don't trust them blindly — read and verify the code yourself before installing.
 
 ## DISCLAIMER
 
@@ -18,26 +21,13 @@ This module helps you to replace your system webview though Magisk.
 - S.O.:
     - minimum: Android 10+ (API 29, every provider is a Chromium fork)
     - recommended: Android 13+
-- Magisk 20.4+
-- KernelSU 0.6+
-
-## Device ROM
-
-| API | OS | ROM | version |
-|:---:|:--:|:---:|:-------:|
-| `26` | `Android 8` |      | `AAPT` |
-| `27` | `Android 8.1` |       | `AAPT` |
-| `28` | `Android 9` |       | `AAPT` |
-| `29` | `Android 10` |       | `AAPT` |
-| `30` | `Android 11` |       | `AAPT` |
-| `31` | `Android 12` | `LOS 19` | `AAPT` |
-| `32` | `Android 12L` | `LOS 19.1` | `AAPT` |
-| `33` | `Android 13` | `LOS 20` | `AAPT` |
-| `34*` | `Android 14` | `crDroid 10.x`, `LOS 21` | `AAPT2` |
-| `35` | `Android 15` |       | `AAPT2` |
-| `36` | `Android 16` | `CrDroid 12.5 QPR2, Magisk 30.6`| `AAPT2` |
-
-\* before the security patch update of june 2024 you can still use the AAPT version but if you have a newer version you need to use the AAPT2 version
+- Root manager:
+    - Magisk 20.4+
+    - KernelSU 0.6+
+- Architectures (per provider, see the registry in `providers.sh`):
+    - `arm64`: Vanadium, Thorium, Cromite
+    - `arm` (32-bit): Thorium
+    - `x86_64`: Vanadium
 
 ## Support
 
@@ -45,16 +35,32 @@ You can contribute pull requests or support the original author.
 
 ## Features
 
-- Works on any device running Android 10+ (API 29+) and Magisk 20.4+
+- Works on any device running Android 10+ (API 29+) and Magisk 20.4+ / KernelSU 0.6+
+- At install, a volume-key menu lists the providers your device can run (the registry
+  in `providers.sh` decides what is offered: provider + minimum API + architectures)
 - Replace the webview with one of:
     1. ~~[Bromite](https://github.com/bromite/bromite)~~ (Deprecated, removed)
     2. ~~[Mulch](https://gitlab.com/divested-mobile/mulch)~~ (Deprecated, removed)
-    3. [Vanadium](https://gitlab.com/grapheneos/platform_external_vanadium) (frequent chromium updates)
-    4. [Thorium](https://github.com/gz83/thorium) (arm64 and arm32 only)
+    3. [Vanadium](https://gitlab.com/grapheneos/platform_external_vanadium) (arm64 and x86_64; frequent Chromium updates — on arm64 the smaller `arm64` or the `arm64-multilib` prebuilt is picked per device)
+    4. [Thorium](https://github.com/gz83/thorium) — a contributor fork of [Alex313031/thorium](https://github.com/Alex313031/thorium) that publishes the Android builds (arm64 and arm32 only; current Chromium)
     5. [Cromite](https://github.com/uazo/cromite) (arm64 only; last update: Sep 15 2026, v153.0.8010.37, old chromium version may be a security risk)
+- Every download is verified against the upstream sha256 (GitLab `content_sha256` for
+  Vanadium, release asset digests for Cromite/Thorium), and the install **fails closed**
+  when the hash cannot be read — an unverified WebView is never installed. Downloads
+  use retries and timeouts plus a DNS fallback ladder (direct resolver → DoH → system
+  resolver), with TLS certificate verification on
+- Ships a prebuilt, pre-signed overlay APK (`overlays/WebviewOverlay.apk`) that
+  registers the non-stock WebView packages (Vanadium, Thorium — Cromite reuses the
+  stock `com.android.webview` package name and needs no overlay). No on-device build
+  tools (`aapt2`, `zipsigner`) are needed at install time anymore
 - The module's action button in the Magisk app updates the installed webview to the
-  current upstream build of the same provider — no re-flash, no reboot. To switch to
-  a different provider, reinstall the module and pick it in the menu.
+  current upstream build of the same provider — no re-flash, no reboot. It compares the
+  upstream and installed sha256, reports "already up to date" when nothing moved, and
+  leaves the current WebView untouched on any failure (log: `action.log` in the module
+  dir). To switch to a different provider, reinstall the module and pick it in the menu
+- No boot-time scripts: `post-fs-data.sh` is gone (the overlay is a static RRO, enabled
+  at boot on its own). The one-time migration of old installs runs at install time, and
+  `uninstall.sh` restores the stock WebView
 
 ## Create module
 
@@ -62,6 +68,22 @@ You can contribute pull requests or support the original author.
 2. Run the script according to the OS:
    - Unix/Linux: `./create-module.sh`
    - Windows: `./create-module.ps1`
+
+The module zip ships the prebuilt `overlays/WebviewOverlay.apk`. To rebuild it after
+changing `overlays/src/`, run `overlays/build.sh` with the Android SDK on `PATH`
+(build-tools + platform) — or just push: the `overlay` GitHub workflow rebuilds it,
+verifies the compiled result and opens a PR.
+
+## Automation (keeps the module current)
+
+- `update-binaries.yml` — monthly: pulls the newest release of the curl fork, verifies
+  the sha256 pins and opens a PR; what ships is recorded in `common/tools/VERSIONS.json`
+- `vanadium-branch.yml` — weekly: opens a PR when Vanadium's default branch moves
+  (`ANDROID_VANADIUM_VERSION` in `providers.sh`)
+- `overlay.yml` — rebuilds `WebviewOverlay.apk` from `overlays/src/` when it changes
+- `sdk-packages.yml` — weekly: watches the Android SDK build-tools/platform pins used
+  by the overlay build
+- Dependabot bumps the pinned GitHub Actions; a guard workflow auto-merges only those PRs
 
 ## Credits
 
@@ -73,7 +95,7 @@ You can contribute pull requests or support the original author.
 - [Mulch by DivestOS](https://gitlab.com/divested-mobile/mulch)
 - [Thorium by Alex313031](https://github.com/Alex313031/thorium) (Android builds from [gz83/thorium](https://github.com/gz83/thorium))
 - [cUrl](https://github.com/curl/curl)
-- [cUrl binary](https://github.com/F3FFO/compile_zlib_openssl_curl_android)
+- [curl binary](https://github.com/beautiful-orca/curl-android) — fork of [vvb2060/curl-android](https://github.com/vvb2060/curl-android), built with c-ares so `--dns-servers` works; refreshed monthly by CI and pinned in `common/tools/VERSIONS.json`
 - [Cromite by uazo](https://github.com/uazo/cromite)
 - [WebViewChanger](https://github.com/Lordify95/WebViewChanger)
 
