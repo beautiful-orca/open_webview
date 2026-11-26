@@ -1,5 +1,4 @@
 #!/system/bin/sh
-SKIP_INSTALLATION=1
 # To get the latest Vanadium version change ANDROID_VANADIUM_VERSION to the current version of https://gitlab.com/grapheneos/platform_external_vanadium
 # Check the URL of the prebuilt folder, eg. https://gitlab.com/grapheneos/platform_external_vanadium/-/tree/16-qpr2/prebuilt?ref_type=heads, 16-qpr2 is latest version
 ANDROID_VANADIUM_VERSION=17
@@ -10,6 +9,17 @@ LOG="$MODPATH"/webview.log
 # so downloading there costs RAM (~843 MB peak with the old extra copies).
 DL_DIR=/data/local/tmp/open_webview
 IS_MINIMAL_INSTALLATION=0
+
+# id | label | min_api | arch:variant ...
+# Order is the menu order; the first entry is the default when nobody answers.
+# Keys are $ARCH after the x64->x86_64 normalisation in customize.sh, i.e. ABI
+# names. The variant is provider-specific: Vanadium's is a prebuilt directory,
+# Cromite's is a release asset filename.
+PROVIDERS='
+vanadium|Vanadium|29|arm64:arm64-multilib x86_64:x86_64
+cromite|Cromite|29|arm64:arm64_SystemWebView.apk
+'
+MENU_TIMEOUT=15
 
 get_version_github() {
 	local repo=$1
@@ -53,6 +63,22 @@ get_system_path_according_to_rom() {
 	fi
 }
 
+# Prints "id|label|variant" for every provider this device can run, in registry order.
+available_providers() {
+	local id label min_api variants v
+	while IFS='|' read -r id label min_api variants; do
+		[ -z "$id" ] && continue
+		[[ $API -ge $min_api ]] || continue
+		for v in $variants; do
+			case $v in
+			"$ARCH":*) echo "$id|$label|${v#*:}" ;;
+			esac
+		done
+	done <<EOF
+$PROVIDERS
+EOF
+}
+
 vanadium() {
 	VW_APK_URL=https://gitlab.com/api/v4/projects/40905333/repository/files/prebuilt%2F${1}%2FVanadiumWebView.apk/raw?ref=${ANDROID_VANADIUM_VERSION}
 	VW_TRICHROME_APK_URL=""
@@ -68,15 +94,15 @@ vanadium() {
 	OVERLAY_APK_FILE="WebviewOverlay.apk"
 }
 cromite() {
-	# Cromite publishes arm64_SystemWebView.apk only: arm, x86 and x86_64 releases
-	# carry ChromePublic.apk, which is a browser, not a WebView provider.
-	if [[ $ARCH != "arm64" ]]; then
-		echo "[$(date "+%H:%M:%S")] Cromite webview is arm64 only, arch is: $ARCH" >>$LOG
-		ui_print "  Cromite only publishes an arm64 WebView."
-		ui_print "  Your architecture is $ARCH."
+	# The registry only offers Cromite on arm64 (the other arches carry
+	# ChromePublic.apk, a browser), so $1 is arm64_SystemWebView.apk here;
+	# guard against an empty variant anyway.
+	local asset_name=$1
+	if [[ -z $asset_name ]]; then
+		echo "[$(date "+%H:%M:%S")] cromite called without an asset name" >>$LOG
+		ui_print "  Internal error: no Cromite asset for this device."
 		clean_up 1
 	fi
-	local asset_name="arm64_SystemWebView.apk"
 	VW_APK_URL=https://github.com/uazo/cromite/releases/download/$(get_version_github "uazo/cromite" "$asset_name")/$asset_name
 	VW_TRICHROME_APK_URL=""
 	VW_SHA=""
@@ -329,51 +355,59 @@ if [[ ! $BOOTMODE ]]; then
 	clean_up 1
 fi
 
-ui_print "  Choose between:"
-if [[ $IS64BIT ]]; then
-	if [[ $API -ge 29 ]] && [[ $API -lt 33 ]]; then
-		ui_print "    Cromite"
-	elif [[ $API -ge 33 ]]; then
-		ui_print "    Vanadium, Cromite"
-	fi
-fi
-sleep 3
-ui_print ""
-ui_print "  Select: [Vol+ = yes, Vol- = no]"
-
-
-if [[ $IS64BIT ]]; then
-	if [[ $API -ge 33 ]] && [[ $SKIP_INSTALLATION -eq 1 ]]; then
-		SKIP_INSTALLATION=0
-		ui_print "  -> Vanadium"
-		if chooseport 3; then
-			if [[ $ARCH = "arm64" ]]; then
-				echo "[$(date "+%H:%M:%S")] Select vanadium for arm64" >>$LOG
-				vanadium "arm64-multilib"
-			else
-				echo "[$(date "+%H:%M:%S")] Select vanadium for x86_64" >>$LOG
-				vanadium "x86_64"
-			fi
-		else
-			SKIP_INSTALLATION=1
-		fi
-	fi
-	if [[ $API -ge 29 ]] && [[ $SKIP_INSTALLATION -eq 1 ]]; then
-		SKIP_INSTALLATION=0
-		ui_print "  -> Cromite"
-		if chooseport 3; then
-			echo "[$(date "+%H:%M:%S")] Select cromite" >>$LOG
-			cromite
-		else
-			SKIP_INSTALLATION=1
-		fi
-	fi
+AVAILABLE=$(available_providers)
+if [[ -z $AVAILABLE ]]; then
+	echo "[$(date "+%H:%M:%S")] No provider available for arch=$ARCH api=$API" >>$LOG
+	ui_print "  No WebView provider is available for $ARCH."
+	clean_up 1
 fi
 
-if [[ $SKIP_INSTALLATION -eq 1 ]]; then
-	echo "[$(date "+%H:%M:%S")] No webview selected" >>$LOG
-	abort "No webview selected!"
+total=$(echo "$AVAILABLE" | wc -l)
+ui_print "  Available WebView providers:"
+echo "$AVAILABLE" | while IFS= read -r line; do
+	ui_print "    $(echo "$line" | cut -d'|' -f2)"
+done
+
+# One cycle: Vol+ selects the highlighted provider and installs straight away,
+# Vol- advances to the next (wrapping at the end), timeout keeps the highlight
+# as an unconfirmed default. A defaulted choice must be confirmed before
+# anything is downloaded — silence is not consent.
+index=1
+confirmed=0
+while true; do
+	line=$(echo "$AVAILABLE" | sed -n "${index}p")
+	VW_PROVIDER=$(echo "$line" | cut -d'|' -f1)
+	label=$(echo "$line" | cut -d'|' -f2)
+	VW_VARIANT=$(echo "$line" | cut -d'|' -f3)
+	ui_print ""
+	ui_print "  $label  ($index/$total)"
+	ui_print "    Vol+ = select, Vol- = next   (${MENU_TIMEOUT}s)"
+	chooseport $MENU_TIMEOUT
+	sel=$?
+	if [[ $sel -eq 0 ]]; then
+		confirmed=1
+		break
+	elif [[ $sel -eq 1 ]]; then
+		index=$(( index + 1 ))
+		[ $index -gt $total ] && index=1
+	else
+		break
+	fi
+done
+
+if [[ $confirmed -ne 1 ]]; then
+	ui_print ""
+	ui_print "  No selection made. Default: $label"
+	ui_print "    Install $label?  Vol+ = yes, Vol- = no   (${MENU_TIMEOUT}s)"
+	chooseport $MENU_TIMEOUT
+	if [[ $? -ne 0 ]]; then
+		echo "[$(date "+%H:%M:%S")] No webview selected" >>$LOG
+		abort "No webview selected!"
+	fi
 fi
+
+echo "[$(date "+%H:%M:%S")] Selected $VW_PROVIDER ($VW_VARIANT) for $ARCH" >>$LOG
+"$VW_PROVIDER" "$VW_VARIANT"
 
 if [[ -f $CONFIG_FILE ]]; then
 	echo "[$(date "+%H:%M:%S")] Remove old config file" >>$LOG
