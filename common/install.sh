@@ -223,9 +223,9 @@ clean_up() {
 	echo "[$(date "+%H:%M:%S")] Installation success" >>$LOG
 }
 
-if [[ $API -lt 26 ]]; then
+if [[ $API -lt 29 ]]; then
 	ui_print "  Your android version is not supported"
-	ui_print "  Minimum android version supported: 8"
+	ui_print "  Minimum android version supported: 10"
 	clean_up 1
 fi
 
