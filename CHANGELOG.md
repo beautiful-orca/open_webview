@@ -1,4 +1,12 @@
 
+# v2.6.1 (fork by beautiful-orca)
+
+- Commit the tool binaries compressed (`common/tools/tools.tar.xz`) instead of raw — repo-size hygiene; the module zip content is unchanged [c95117a](https://github.com/beautiful-orca/open_webview/commit/c95117a823a8bb2042071d9a283e0c0206d56ddd)
+- Add the release workflow: builds `open-webview.zip` with `create-module.sh` and publishes it as the release asset on every `v*` tag push [338f462](https://github.com/beautiful-orca/open_webview/commit/338f462b0cd96517ffa57d98b8e9de0372f4ef23)
+- Remove the finished execution plan `PLAN.md` [027ff32](https://github.com/beautiful-orca/open_webview/commit/027ff32ea95e22902a9f11cef9b2ed4805140bb1), [f7900cb](https://github.com/beautiful-orca/open_webview/commit/f7900cb56922e83af5bbb7dc1ed2281414ab0e68), [dc3bb32](https://github.com/beautiful-orca/open_webview/commit/dc3bb32e58c873f499f364e28f0039f02054a95b)
+- Changelog entry for v2.6.0 [c75f1cd](https://github.com/beautiful-orca/open_webview/commit/c75f1cdfeb1d5aaffa163f0c36e3cc1b238e0436)
+- Release v2.6.1 [049b6bc](https://github.com/beautiful-orca/open_webview/commit/049b6bc52f8fe03181d83075276bba7dcca7a3fd)
+
 # v2.6.0 (fork by beautiful-orca)
 
 - Ship a prebuilt, pre-signed `WebviewOverlay.apk` (superset provider list, Vanadium first, `com.android.webview` second) and install it directly instead of building the overlay on-device [15e1dfb](https://github.com/beautiful-orca/open_webview/commit/15e1dfb7a16d51cd9dd9cda1bfabb3f14b972b95), [9b5e1d9](https://github.com/beautiful-orca/open_webview/commit/9b5e1d906fece612fcd7807b41dd2964885cacc2), [a935b06](https://github.com/beautiful-orca/open_webview/commit/a935b065dcf7bb6708dd2904f9490cd6afbe078d), [dee92b9](https://github.com/beautiful-orca/open_webview/commit/dee92b9010840c1e5c8848c65cce875c3905c04a), [0de4423](https://github.com/beautiful-orca/open_webview/commit/0de4423d3ef866e7da29ac302a202daaa82bf68f), [b9f4223](https://github.com/beautiful-orca/open_webview/commit/b9f42236b498607edcbe421efd20c317704c4110)
