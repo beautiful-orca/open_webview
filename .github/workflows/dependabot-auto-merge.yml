@@ -1,0 +1,72 @@
+# Auto-merge Dependabot PRs that only bump action versions.
+#
+# Scope guards, both required:
+#   1. author is dependabot[bot] — the other bots in this repo (update-binaries,
+#      overlay, vanadium-branch) author as github-actions[bot] via
+#      create-pull-request and change shipped artifacts, so they stay manual
+#      (PLAN.md §16.6: the branch PR must not be auto-merged);
+#   2. every changed file is under .github/workflows/ — for the github-actions
+#      ecosystem that is all Dependabot ever edits, so a PR touching anything
+#      else fails closed here.
+#
+# The merge is direct, not --auto: PRs opened with GITHUB_TOKEN do not trigger
+# other workflows, so there are no external checks to wait for — this workflow's
+# own YAML sanity check is the gate. Requires squash merging to be allowed on
+# the repo (default) and no branch-protection rule that blocks the token.
+
+name: Auto-merge Dependabot
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write        # delete the PR branch after merge
+  pull-requests: write   # merge the PR
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+
+      - name: Guard — only workflow files may change
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          files=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" \
+            "${{ github.event.pull_request.url }}/files" | jq -r '.[].filename')
+          echo "changed files:"; echo "$files"
+          bad=$(printf '%s\n' "$files" | grep -v '^\.github/workflows/.*\.ya\?ml$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::PR touches non-workflow files, not auto-merging: $bad"
+            exit 1
+          fi
+
+      - name: Sanity-check the workflows parse
+        run: |
+          set -euo pipefail
+          pip install -q pyyaml
+          python3 - <<'PY'
+          import glob, yaml
+          files = glob.glob('pr/.github/workflows/*.yml') + ['pr/.github/dependabot.yml']
+          for f in files:
+              yaml.safe_load(open(f))
+          print('YAML OK:', len(files), 'files')
+          PY
+
+      - name: Merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "${{ github.event.pull_request.number }}" \
+            --repo "$GITHUB_REPOSITORY" --squash --delete-branch
