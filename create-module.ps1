@@ -1,38 +1,23 @@
 $MODULE_NAME = "open-webview.zip"
-$TOOLS = "tools.tar"
 $ROOT_DIR = Get-Location
 $OVERLAY_DIR = "overlays"
 $TOOLS_DIR = "common/tools"
-
-function Compress {
-    param (
-        [string]$type,
-        [string]$output,
-        [string[]]$input
-    )
-    Write-Host "Compressing $output..."
-    & 7z.exe a -t$type -r $output $input | Out-Null
-}
 
 Write-Host "Deleting old files..."
 if (Test-Path $MODULE_NAME) {
     Remove-Item -Force $MODULE_NAME
 }
-if (Test-Path "$TOOLS_DIR\$($TOOLS).xz") {
-    Remove-Item -Force "$TOOLS_DIR\$($TOOLS).xz"
-}
 Get-ChildItem -Path "$OVERLAY_DIR" -Filter "*.zip" | Remove-Item -Force
 Get-ChildItem -Path "$OVERLAY_DIR" -Filter "*.idsig" | Remove-Item -Force
 Write-Host "Old files deleted!"
 
-Write-Host "Zipping tools..."
-Set-Location -Path "$TOOLS_DIR/tools"
-Compress -type tar -output $TOOLS -input (Get-ChildItem -Name)
-Compress -type xz -output "${TOOLS}.xz" -input $TOOLS
-Remove-Item -Force $TOOLS
-Move-Item -Path "${TOOLS}.xz" -Destination "$TOOLS_DIR" -Force
-Set-Location -Path $ROOT_DIR
-Write-Host "Tools zipped!"
+# The tool binaries are committed compressed (common/tools/tools.tar.xz) to keep
+# the repo small; the raw common/tools/tools/ tree is a gitignored local artifact
+# rebuilt by scripts/install-binaries.sh. Fail loudly if the archive is missing.
+if (-not (Test-Path "$TOOLS_DIR\tools.tar.xz")) {
+    Write-Error "$TOOLS_DIR\tools.tar.xz not found — run scripts/install-binaries.sh first"
+    exit 1
+}
 
 Write-Host "Creating module zip..."
 & 7z.exe a -tzip -r $MODULE_NAME * `

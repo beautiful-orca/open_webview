@@ -12,7 +12,9 @@ The fork's own workflow publishes per-ABI release assets (`curl-<abi>` + `SHA256
 `.github/workflows/update-binaries.yml` in this repo pulls the latest release monthly,
 verifies it and opens a PR. The machine-readable record of what is installed is
 [`VERSIONS.json`](VERSIONS.json), rewritten by that workflow in the same PR as the
-binaries.
+binaries. The raw `tools/<arch>/curl` tree is gitignored — binaries are committed only
+in compressed form as [`tools.tar.xz`](tools.tar.xz), which `install-binaries.sh`
+regenerates and `create-module.sh` ships in the module zip (PROJECT-NOTES §4.3f).
 
 ### The refresh pipeline
 

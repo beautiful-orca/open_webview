@@ -6,9 +6,10 @@
 #
 # Maps upstream ABI names to this repo's tool directories:
 #   arm64-v8a -> arm64, armeabi-v7a -> arm, x86 -> x86, x86_64 -> x86_64.
-# riscv64 has no directory here and is skipped. common/tools/tools.tar.xz is a
-# packaging artifact (gitignored, rebuilt by create-module.sh), so it is not
-# regenerated here.
+# riscv64 has no directory here and is skipped. The raw tools/ tree is a gitignored
+# local artifact; this script also repacks it into common/tools/tools.tar.xz, which
+# is the committed form (repo-size hygiene, PROJECT-NOTES §4.3f) and what
+# create-module.sh ships in the module zip.
 
 set -eu
 
@@ -26,3 +27,9 @@ for abi in arm64-v8a armeabi-v7a x86 x86_64; do
   install -m 0755 "$CURL_DIR/curl-$abi" "$TOOLS/$arch/curl"
   echo "installed $arch/curl"
 done
+
+# Pack the raw tree into the committed archive (deterministic member order and
+# ownership so diffs stay minimal).
+tar -C "$TOOLS" --sort=name --owner=0 --group=0 --numeric-owner -cf - . \
+    | xz -9 -T0 -c > "$ROOT/common/tools/tools.tar.xz"
+echo "packed $ROOT/common/tools/tools.tar.xz"

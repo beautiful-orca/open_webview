@@ -1,4 +1,4 @@
-common/tools/tools.tar.xz
+common/tools/tools/
 open-webview.zip
 overlays/*.zip
 overlays/*.idsig
