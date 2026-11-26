@@ -53,6 +53,7 @@ apksigner sign \
     --min-sdk-version 26 \
     --v1-signing-enabled true \
     --v2-signing-enabled true \
+    --v4-signing-enabled false \
     --out "$OUT" "$WORK/unsigned.apk"
 
 echo "built $OUT"
