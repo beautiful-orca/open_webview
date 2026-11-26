@@ -1,0 +1,24 @@
+# Dependabot watches the pinned action tags in .github/workflows/ and opens a
+# PR when a newer release exists, major bumps included (actions/checkout@v4 ->
+# v7, actions/setup-java@v4 -> v6, ...). All action updates are grouped into a
+# single PR so one merge keeps every workflow current.
+#
+# Nothing else in the repo has a datasource, by design: the Android SDK
+# packages (build-tools;36.0.0, platforms;android-35) are pinned in the
+# workflow steps and stay manual, and the bundled curl is refreshed by
+# .github/workflows/update-binaries.yml on its own monthly schedule.
+#
+# This file only configures Dependabot — "Dependabot version updates" must
+# also be enabled in the repo's Settings -> Security on GitHub.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
