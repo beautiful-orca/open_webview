@@ -94,7 +94,7 @@ verifies the compiled result and opens a PR.
 
 ## Automation (keeps the module current)
 
-- `update-binaries.yml` — monthly: pulls the newest release of the curl fork, verifies
+- `update-binaries.yml` — monthly: pulls the newest release of the curl binary of [beautiful-orca curl-android fork](https://github.com/beautiful-orca/curl-android), verifies
   the sha256 pins and opens a PR; what ships is recorded in `common/tools/VERSIONS.json`
 - `vanadium-branch.yml` — weekly: opens a PR when Vanadium's default branch moves
   (`ANDROID_VANADIUM_VERSION` in `providers.sh`)
@@ -113,16 +113,14 @@ verifies the compiled result and opens a PR.
 - [Mulch by DivestOS](https://gitlab.com/divested-mobile/mulch)
 - [Thorium by Alex313031](https://github.com/Alex313031/thorium) (Android builds from [gz83/thorium](https://github.com/gz83/thorium))
 - [cUrl](https://github.com/curl/curl)
-- [curl binary](https://github.com/beautiful-orca/curl-android) — fork of [vvb2060/curl-android](https://github.com/vvb2060/curl-android), built with c-ares so `--dns-servers` works; refreshed monthly by CI and pinned in `common/tools/VERSIONS.json`
+- [curl binary](https://github.com/beautiful-orca/curl-android) — beautiful-orca fork of [vvb2060/curl-android](https://github.com/vvb2060/curl-android), built with c-ares so `--dns-servers` works; refreshed monthly by CI and pinned in `common/tools/VERSIONS.json`
 - [Cromite by uazo](https://github.com/uazo/cromite)
 - [WebViewChanger](https://github.com/Lordify95/WebViewChanger)
 - [Vanadium-WebViewBrowser by NoneBaiano](https://github.com/NoneBaiano/Vanadium-WebViewBrowser) (fork of WebViewChanger; download-with-retries and uninstall patterns)
 
 ## License
 
-Copyright 2024 F3FFO
-
-The source code is available under [GPL-3.0](https://github.com/Magisk-Modules-Alt-Repo/open_fonts/blob/master/LICENSE)
+The source code is available under [GPL-3.0](https://github.com/beautiful-orca/open_webview/blob/master/LICENSE)
 
 ## Change logs
 
