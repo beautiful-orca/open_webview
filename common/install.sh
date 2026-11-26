@@ -30,10 +30,15 @@ get_sha_gitlab_lfs() {
 		cut -d":" -f2
 }
 get_sha_gitlab() {
+	# Read only the JSON prefix that holds the hash: the files API returns the
+	# whole file base64-encoded (374 MB for a 281 MB APK), and content_sha256
+	# sits at byte ~130, so 4 KB is ample headroom. The old
+	# grep 'content_sha256:' never matched — the JSON is
+	# "content_sha256":"…", with a quote before the colon.
 	"$CURL_BIN" -fsSL --connect-timeout 15 --max-time 60 --retry 3 --retry-delay 3 \
 		"https://gitlab.com/api/v4/projects/$1/repository/files/$2" 2>/dev/null |
-		grep 'content_sha256:' |
-		cut -d":" -f2
+		head -c 4096 |
+		grep -o '"content_sha256":"[a-f0-9]*' | cut -d'"' -f4
 }
 get_system_path_according_to_rom() {
 	local is_los=$(getprop | grep -o -c "lineage")
@@ -48,8 +53,13 @@ get_system_path_according_to_rom() {
 vanadium() {
 	VW_APK_URL=https://gitlab.com/api/v4/projects/40905333/repository/files/prebuilt%2F${1}%2FVanadiumWebView.apk/raw?ref=${ANDROID_VANADIUM_VERSION}
 	VW_TRICHROME_APK_URL=""
-	# VW_SHA=$(get_sha_gitlab "40905333" "prebuilt%2F${1}%2FVanadiumWebView.apk?ref=${ANDROID_VANADIUM_VERSION}")
-	VW_SHA=""
+	VW_SHA=$(get_sha_gitlab "40905333" "prebuilt%2F${1}%2FVanadiumWebView.apk?ref=${ANDROID_VANADIUM_VERSION}")
+	if [[ -z $VW_SHA ]]; then
+		echo "[$(date "+%H:%M:%S")] No content_sha256 for prebuilt/${1}/VanadiumWebView.apk" >>$LOG
+		ui_print "  Could not fetch the Vanadium checksum."
+		ui_print "  Refusing to install an unverified WebView."
+		clean_up 1
+	fi
 	VW_SYSTEM_PATH=$(get_system_path_according_to_rom)/VanadiumWebview
 	VW_PACKAGE="app.vanadium.webview"
 	OVERLAY_APK_FILE="WebviewOverlay.apk"
@@ -115,19 +125,50 @@ download_file() {
 	fi
 	echo "[$(date "+%H:%M:%S")] File downloaded: $out" >>$LOG
 }
-check_integrity() {
-	if [ -f "/sbin/sha256sum" ]; then
-		echo "[$(date "+%H:%M:%S")] SHA256SUM calculated with magisk lib" >>$LOG
-		SHA_FILE_CALCULATED=$(/sbin/sha256sum $1 | cut -d' ' -f1)
+# sha256sum is a busybox applet, so it is on PATH in the installer under Magisk,
+# KernelSU and APatch. /sbin only exists up to Android 10: from Android 11 Magisk
+# mounts its tmpfs at /debug_ramdisk, so the old /sbin probe always missed.
+sha256_of() {
+	if command -v sha256sum >/dev/null 2>&1; then
+		sha256sum "$1"
+	elif [ -x "$MAGISKTMP/busybox" ]; then
+		"$MAGISKTMP/busybox" sha256sum "$1"
 	else
-		echo "[$(date "+%H:%M:%S")] SHA256SUM calculated with system native lib" >>$LOG
-		SHA_FILE_CALCULATED=$(sha256sum $1 | cut -d' ' -f1)
+		return 1
 	fi
-	
-	echo "[$(date "+%H:%M:%S")] SHA256SUM calculated: $SHA_FILE_CALCULATED" >>$LOG
-	echo "[$(date "+%H:%M:%S")] SHA256SUM from file: $2" >>$LOG
+}
+check_integrity() {
+	local file=$1 expected=$2 calculated
 
-	if [[ $SHA_FILE_CALCULATED = $2 ]]; then
+	if [[ ! -f $file ]]; then
+		echo "[$(date "+%H:%M:%S")] Integrity: file missing: $file" >>$LOG
+		ui_print "  Integrity check failed: download missing"
+		clean_up 1
+	fi
+	# 64 lowercase hex, checked with a glob because busybox ash has no =~.
+	case $expected in
+	"" | *[!0-9a-f]*)
+		echo "[$(date "+%H:%M:%S")] Integrity: malformed hash: $expected" >>$LOG
+		ui_print "  Integrity check failed: no usable checksum"
+		clean_up 1
+		;;
+	esac
+	if [[ ${#expected} -ne 64 ]]; then
+		echo "[$(date "+%H:%M:%S")] Integrity: hash is ${#expected} chars" >>$LOG
+		ui_print "  Integrity check failed: no usable checksum"
+		clean_up 1
+	fi
+
+	calculated=$(sha256_of "$file" | cut -d' ' -f1)
+	if [[ -z $calculated ]]; then
+		echo "[$(date "+%H:%M:%S")] Integrity: cannot compute sha256" >>$LOG
+		ui_print "  Integrity check failed: sha256sum not found"
+		clean_up 1
+	fi
+	echo "[$(date "+%H:%M:%S")] SHA256SUM calculated: $calculated" >>$LOG
+	echo "[$(date "+%H:%M:%S")] SHA256SUM expected: $expected" >>$LOG
+
+	if [[ $calculated = $expected ]]; then
 		echo "[$(date "+%H:%M:%S")] Integrity checked" >>$LOG
 		ui_print "  Integrity checked!"
 	else
@@ -194,7 +235,10 @@ download_install_webview() {
 
 	if [[ ! -z $VW_SHA ]]; then
 		ui_print "  Checking integrity..."
-		check_integrity webview.apk $VW_SHA
+		check_integrity "$TMPDIR/webview.apk" "$VW_SHA"
+	else
+		ui_print "  No checksum available, skipping integrity check"
+		echo "[$(date "+%H:%M:%S")] No checksum for $VW_PACKAGE, integrity not checked" >>$LOG
 	fi
 	replace_old_webview
 	install_webview
