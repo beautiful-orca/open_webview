@@ -69,12 +69,35 @@ $PROVIDERS
 EOF
 }
 
+# Vanadium publishes two arm64 prebuilts: `arm64` (189,406,104 B) and
+# `arm64-multilib` (281,009,321 B). The multilib one carries armeabi-v7a
+# libraries so 32-bit apps on a 64-bit device can load the WebView
+# in-process; without it those apps fail with the lib/multilib error
+# (issue #3). A device that cannot run 32-bit code at all never loads those
+# libraries, so it gets the smaller APK. An empty abilist keeps today's
+# behaviour — the one direction where a wrong answer would be harmful.
+vanadium_abi() {
+	local abilist
+	abilist=$(getprop ro.product.cpu.abilist)
+	case $abilist in
+	"") echo "arm64-multilib" ;;
+	*armeabi-v7a*) echo "arm64-multilib" ;;
+	*) echo "arm64" ;;
+	esac
+}
+
 vanadium() {
-	VW_APK_URL=https://gitlab.com/api/v4/projects/40905333/repository/files/prebuilt%2F${1}%2FVanadiumWebView.apk/raw?ref=${ANDROID_VANADIUM_VERSION}
+	local prebuilt=$1
+	# On arm64, refine the registry's default per device.
+	if [[ $ARCH = "arm64" ]]; then
+		prebuilt=$(vanadium_abi)
+	fi
+	VW_VARIANT=$prebuilt
+	VW_APK_URL=https://gitlab.com/api/v4/projects/40905333/repository/files/prebuilt%2F${prebuilt}%2FVanadiumWebView.apk/raw?ref=${ANDROID_VANADIUM_VERSION}
 	VW_TRICHROME_APK_URL=""
-	VW_SHA=$(get_sha_gitlab "40905333" "prebuilt%2F${1}%2FVanadiumWebView.apk?ref=${ANDROID_VANADIUM_VERSION}")
+	VW_SHA=$(get_sha_gitlab "40905333" "prebuilt%2F${prebuilt}%2FVanadiumWebView.apk?ref=${ANDROID_VANADIUM_VERSION}")
 	if [[ -z $VW_SHA ]]; then
-		echo "[$(date "+%H:%M:%S")] No content_sha256 for prebuilt/${1}/VanadiumWebView.apk" >>$LOG
+		echo "[$(date "+%H:%M:%S")] No content_sha256 for prebuilt/${prebuilt}/VanadiumWebView.apk" >>$LOG
 		ui_print "  Could not fetch the Vanadium checksum."
 		ui_print "  Refusing to install an unverified WebView."
 		clean_up 1
