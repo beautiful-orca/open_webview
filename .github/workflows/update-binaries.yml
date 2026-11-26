@@ -1,0 +1,77 @@
+# Monthly refresh of the bundled curl binary. Plan: CI-BINARIES.md, scoped to
+# curl only: PROJECT-NOTES §13.6 (decided 2026-11-22) moves aapt2 to the SDK's
+# build-tools on the build machine and §12.9 deletes the bundled aapt2 and
+# zipsigner copies, so there is nothing else here to keep current.
+#
+# Downloads the latest release assets from beautiful-orca/curl-android (curl
+# built there with c-ares), verifies them (scripts/verify-binaries.sh), installs
+# them over common/tools/tools/, rewrites common/tools/VERSIONS.json, and opens
+# a PR when anything changed. A month with no upstream movement produces no PR.
+#
+# The fork publishes daily (its own workflow); this job looks monthly. If the
+# fork's newest release is less than an hour old it may still be the previous
+# one here — nothing breaks, the new binary arrives on the next run.
+
+name: Update bundled binaries
+
+on:
+  schedule:
+    - cron: '0 4 1 * *'   # 04:00 UTC on the 1st of every month
+  workflow_dispatch:
+
+permissions:
+  contents: write        # push the branch
+  pull-requests: write   # open the PR
+
+concurrency:
+  group: update-binaries
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch curl from the fork
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/curl
+          gh release download --repo beautiful-orca/curl-android \
+            --pattern 'curl-*' --pattern 'SHA256SUMS' --dir /tmp/curl
+          ( cd /tmp/curl && sha256sum -c SHA256SUMS )
+
+      - name: Record curl release metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag=$(gh release view --repo beautiful-orca/curl-android --json tagName -q .tagName)
+          body=$(gh release view --repo beautiful-orca/curl-android --json body -q .body)
+          cares=$(printf '%s\n' "$body" \
+            | sed -n 's/^components: .*c-ares=\([^ ]*\).*/\1/p' | head -n 1 \
+            | sed -E 's/^v?cares-?//; s/_/./g')
+          echo "CURL_RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+          echo "CARES_VERSION=$cares" >> "$GITHUB_ENV"
+          echo "curl release: $tag (c-ares ${cares:-unknown})"
+
+      - name: Verify
+        run: ./scripts/verify-binaries.sh /tmp/curl
+
+      - name: Install
+        run: ./scripts/install-binaries.sh /tmp/curl
+
+      - name: Update manifest
+        run: ./scripts/update-manifest.sh /tmp/curl
+
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: chore/binaries
+          delete-branch: true
+          title: 'chore: update bundled curl'
+          commit-message: 'chore: update bundled curl'
+          body-path: /tmp/pr-body.md
+          labels: dependencies

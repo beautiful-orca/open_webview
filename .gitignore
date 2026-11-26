@@ -1,3 +1,7 @@
 common/tools/tools.tar.xz
 open-webview.zip
 overlays/*.zip
+PROJECT-NOTES.md
+CI-BINARIES.md
+CI-VANADIUM-BRANCH.md
+CURL-BUILD.md

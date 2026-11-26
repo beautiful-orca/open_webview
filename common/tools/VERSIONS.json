@@ -1,0 +1,14 @@
+{
+  "curl": {
+    "version": "8.18.0",
+    "cares": "1.34.9",
+    "source": "https://github.com/beautiful-orca/curl-android/releases/tag/v8.18.0",
+    "built": "2026-11-25",
+    "sha256": {
+      "arm": "a44e7e47af563700a653425f33bd9803dcfc1cca6bd3bf8213026667b2221f69",
+      "arm64": "69230472854e84e1cf6ddba4cbf0de5b560c3c118bbe3aab894dc35d025e406d",
+      "x86": "5b0e650159e18bce3b16ded08fdf137a8e9e7edea288bfe52189c684e1383623",
+      "x86_64": "a254b61a78583ed626717d5cb3a15b8480dbd436640136fee59e015d6bc185cb"
+    }
+  }
+}
