@@ -1,4 +1,5 @@
 common/tools/tools.tar.xz
 open-webview.zip
 overlays/*.zip
+overlays/*.idsig
 PROJECT-NOTES.md

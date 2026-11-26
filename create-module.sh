@@ -19,7 +19,7 @@ compress() {
 echo "deleting old files..."
 rm -f "$MODULE_NAME"
 rm -f "$TOOLS_DIR/${TOOLS}.xz"
-rm -f "$OVERLAY_DIR/*.zip"
+rm -f "$OVERLAY_DIR"/*.zip "$OVERLAY_DIR"/*.idsig
 
 echo "zipping tools..."
 cd "$TOOLS_DIR/tools"
@@ -29,17 +29,8 @@ rm -f "$TOOLS"
 mv -f "${TOOLS}.xz" ../
 cd "$ROOT_DIR"
 
-echo "Zipping overlays..."
-cd "$OVERLAY_DIR"
-declare -A overlays=(
-    ["vanadium-overlay29.zip"]="./extracted/vanadium-overlay29/*"
-)
-
-for zip_name in "${!overlays[@]}"; do
-    compress zip "$zip_name" "${overlays[$zip_name]}"
-done
-
-cd "$ROOT_DIR"
 echo -e "creating module zip..."
-7z a -tzip -r $MODULE_NAME * -xr!.git* -xr!img -xr!common/tools/tools -xr!overlays/extracted -x!*.md -x!create-module.* >& /dev/null
+7z a -tzip -r $MODULE_NAME * -xr!.git* -xr!img -xr!common/tools/tools \
+    -xr!overlays/src -xr!overlays/keys -xr!overlays/build.sh \
+    -x!*.md -x!create-module.* >& /dev/null
 echo "done!"
