@@ -5,6 +5,11 @@
 VKS_DIR="$MODPATH/common/addon/Volume-Key-Selector"
 chmod -R 0755 "$VKS_DIR/tools"
 
+# functions.sh derives ARCH32 from ABI32, which is empty on 64-bit-only devices;
+# the keycheck fallback below would then look for tools//keycheck and always
+# time out. Fall back to the 32-bit prefix of the primary ABI.
+[ -z "$ARCH32" ] && ARCH32=$(echo "$ARCH" | cut -c-3)
+
 # Both selectors have three return states: 0 = volume up, 1 = volume down,
 # 2 = no answer within $1 seconds. Neither function aborts; the caller decides.
 chooseport_legacy() {
@@ -30,6 +35,12 @@ chooseport_legacy() {
 chooseport() {
     # Original idea by chainfire and ianmacd @xda-developers
     [ "$1" ] && local delay=$1 || local delay=60
+    # getevent is missing on a few ROMs; without a fallback every prompt then
+    # silently waits out the full timeout and the install aborts.
+    if [ ! -x /system/bin/getevent ]; then
+        chooseport_legacy "$delay"
+        return
+    fi
     local start=$(date +%s)
     local last_shown=-1
     while true; do

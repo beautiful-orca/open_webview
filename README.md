@@ -62,6 +62,24 @@ You can contribute pull requests or support the original author.
   at boot on its own). The one-time migration of old installs runs at install time, and
   `uninstall.sh` restores the stock WebView
 
+## After install
+
+The installer ends with a summary instead of a bare "Done":
+
+- **Restart the device** — the new WebView only takes effect after a reboot.
+- The WebView implementation can be chosen in the **Developer options** of Android.
+- The WebView can be **updated later with the module's action button** in the Magisk app.
+
+Logs and error reports:
+
+- The install log is kept at `webview.log` in the module dir (`/data/adb/modules/open_webview/`).
+  When an install fails, it is copied to **`/sdcard/webview.log`**.
+- The update button logs to `action.log` in the module dir; when an update fails, it is
+  copied to **`/sdcard/action.log`**.
+- To report an error, open an issue on GitHub and include the log:
+  <https://github.com/beautiful-orca/open_webview/issues>
+  There is no guarantee that a reported issue can be fixed.
+
 ## Create module
 
 1. Clone the repository

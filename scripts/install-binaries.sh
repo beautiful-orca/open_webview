@@ -17,6 +17,7 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 CURL_DIR=${1:?usage: install-binaries.sh <curl-dir>}
 TOOLS="$ROOT/common/tools/tools"
 
+archs=
 for abi in arm64-v8a armeabi-v7a x86 x86_64; do
   case "$abi" in
     arm64-v8a)   arch=arm64 ;;
@@ -25,11 +26,17 @@ for abi in arm64-v8a armeabi-v7a x86 x86_64; do
     x86_64)      arch=x86_64 ;;
   esac
   install -m 0755 "$CURL_DIR/curl-$abi" "$TOOLS/$arch/curl"
+  archs="$archs $arch"
   echo "installed $arch/curl"
 done
 
 # Pack the raw tree into the committed archive (deterministic member order and
-# ownership so diffs stay minimal).
-tar -C "$TOOLS" --sort=name --owner=0 --group=0 --numeric-owner -cf - . \
+# ownership so diffs stay minimal). The arch dirs are named explicitly — never
+# pack "." itself: that stores members as "./arm64/..." while the install-time
+# extraction asks for the literal member "arm64/", which tar never matches
+# against a "./"-prefixed name, so nothing extracts and the curl smoke test
+# fails the install.
+# shellcheck disable=SC2086
+tar -C "$TOOLS" --sort=name --owner=0 --group=0 --numeric-owner -cf - $archs \
     | xz -9 -T0 -c > "$ROOT/common/tools/tools.tar.xz"
 echo "packed $ROOT/common/tools/tools.tar.xz"

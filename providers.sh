@@ -37,7 +37,7 @@ available_providers() {
 	local id label min_api variants v
 	while IFS='|' read -r id label min_api variants; do
 		[ -z "$id" ] && continue
-		[[ $API -ge $min_api ]] || continue
+		[[ "$API" -ge "$min_api" ]] || continue
 		for v in $variants; do
 			case $v in
 			"$ARCH":*) echo "$id|$label|${v#*:}" ;;
@@ -54,13 +54,16 @@ EOF
 # flags, because $CURL_BIN carries no alias. --retry-all-errors is
 # deliberately absent: it would retry a 404. Tests curl's exit status, not
 # the output file: an interrupted transfer leaves a partial file behind, and
-# both -f and -s accept it. Returns 0 only when an attempt succeeded.
+# -f alone accepts it. Returns 0 only when an attempt succeeded.
+# No -s: the progress meter is the only feedback during a ~280 MB download in
+# the installer console, and 2>&1 puts it on stdout, which is the stream the
+# Magisk app shows live (stderr only lands in the saved log).
 dl() {
 	local url=$1 out=$2 dns_flag
-	local base="--connect-timeout 15 --max-time 1800 --retry 5 --retry-delay 3 --retry-connrefused -fsSL"
+	local base="--connect-timeout 15 --max-time 1800 --retry 5 --retry-delay 3 --retry-connrefused -fSL"
 	rm -f "$out"
 	for dns_flag in "--dns-servers 1.1.1.1,1.0.0.1" "--doh-url https://1.1.1.1/dns-query" ""; do
-		if "$CURL_BIN" $base $dns_flag "$url" -o "$out"; then
+		if "$CURL_BIN" $base $dns_flag "$url" -o "$out" 2>&1; then
 			return 0
 		fi
 		rm -f "$out"
@@ -82,20 +85,58 @@ sha256_of() {
 	fi
 }
 
+# Hook for fetch()'s per-rung progress. The default is silent; the callers
+# override it — install.sh routes it to ui_print (Magisk's OUTFD, visible live
+# even inside $( )), action.sh to the action output and its log.
+fetch_progress() { :; }
+
+# fetch <url> [extra curl args...] — small metadata GET through the same DNS
+# ladder as dl(): the system resolver (netd dnsproxyd) can refuse a non-app
+# UID, and the action button runs in exactly such a context, which is why
+# get_sha_gitlab() used to return empty there while working at install time.
+# Body goes to stdout; on total failure one diagnostic line goes to stderr.
+fetch() {
+	local url=$1
+	shift
+	local dns_flag rc=1 desc
+	# Metadata only (a few KB of JSON), so the timeouts are tight: a dead rung
+	# must not stall the console for minutes — one retry per rung, the ladder
+	# itself is the fallback. Worst case ~2 min across all three rungs, with
+	# fetch_progress() naming the rung so the user sees where the time goes.
+	# Big downloads use dl() with its own, more generous flags.
+	for dns_flag in "--dns-servers 1.1.1.1,1.0.0.1" "--doh-url https://1.1.1.1/dns-query" ""; do
+		case $dns_flag in
+		--dns-servers*) desc="direct DNS (1.1.1.1, 1.0.0.1)" ;;
+		--doh-url*) desc="DoH (1.1.1.1)" ;;
+		*) desc="system resolver" ;;
+		esac
+		fetch_progress "trying $desc ..."
+		"$CURL_BIN" --connect-timeout 8 --max-time 20 --retry 1 --retry-delay 1 \
+			-fsSL $dns_flag "$url" "$@" 2>/dev/null
+		rc=$?
+		# Exit 23/141 (write error / SIGPIPE) means the downstream reader
+		# closed the pipe early — get_sha_gitlab reads only the first 4 KB via
+		# head -c, and the files API otherwise streams the whole base64 body
+		# (~374 MB). fetch only ever writes to a pipe, so this is that expected
+		# close, not a failure; the prefix the caller needs was delivered.
+		[ $rc -eq 0 -o $rc -eq 23 -o $rc -eq 141 ] && return 0
+	done
+	echo "fetch failed (curl exit $rc): $url" >&2
+	return $rc
+}
+
 get_sha_gitlab() {
 	# Read only the JSON prefix that holds the hash: the files API returns the
 	# whole file base64-encoded (374 MB for a 281 MB APK), and content_sha256
 	# sits at byte ~130, so 4 KB is ample headroom. The old
 	# grep 'content_sha256:' never matched — the JSON is
 	# "content_sha256":"…", with a quote before the colon.
-	"$CURL_BIN" -fsSL --connect-timeout 15 --max-time 60 --retry 3 --retry-delay 3 \
-		"https://gitlab.com/api/v4/projects/$1/repository/files/$2" 2>/dev/null |
+	fetch "https://gitlab.com/api/v4/projects/$1/repository/files/$2" |
 		head -c 4096 |
 		grep -o '"content_sha256":"[a-f0-9]*' | cut -d'"' -f4
 }
 get_sha_gitlab_lfs() {
-	"$CURL_BIN" -fsSL --connect-timeout 15 --max-time 60 --retry 3 --retry-delay 3 \
-		"https://gitlab.com/api/v4/projects/$1/repository/files/$2" 2>/dev/null |
+	fetch "https://gitlab.com/api/v4/projects/$1/repository/files/$2" |
 		grep 'oid sha256:' |
 		cut -d":" -f2
 }
@@ -117,8 +158,7 @@ github_latest() {
 	local repo=$1 want=$2 json
 	local key="$repo/$want"
 	[ "$GH_LATEST_KEY" = "$key" ] && [ -n "$GH_LATEST_SHA" ] && return 0
-	json=$("$CURL_BIN" -sfL --connect-timeout 15 --max-time 60 \
-		"https://api.github.com/repos/$repo/releases/latest") || return 1
+	json=$(fetch "https://api.github.com/repos/$repo/releases/latest") || return 1
 	GH_LATEST_TAG=$(printf '%s\n' "$json" |
 		sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)
 	GH_LATEST_SHA=$(printf '%s\n' "$json" | awk -v want="$want" '

@@ -10,10 +10,24 @@ LOG="$MODPATH"/webview.log
 # so downloading there costs RAM (~843 MB peak with the old extra copies).
 DL_DIR=/data/local/tmp/open_webview
 IS_MINIMAL_INSTALLATION=0
+# When set, the upstream checksum is being resolved in the background and is
+# read from this file before the integrity check (see vanadium()).
+VW_SHA_FILE=""
 
 # CURL_BIN is set by functions.sh to $MODPATH/bin/curl before this file is
 # sourced, so the helpers below resolve through the same copy action.sh uses.
 . "$MODPATH/providers.sh"
+
+# Show fetch()'s DNS-ladder progress live in the installer console: ui_print
+# writes to Magisk's OUTFD, not stdout, so the lines stay visible even from
+# inside the $( ) substitutions that capture the hash or URL — and the log
+# keeps a copy. Without this, a dead first rung stalls the console in silence
+# (Cromite/Thorium resolve the release synchronously; Vanadium's checksum
+# resolves in the background during the download).
+fetch_progress() {
+	ui_print "  $*"
+	echo "[$(date "+%H:%M:%S")] $*" >>$LOG 2>/dev/null
+}
 
 MENU_TIMEOUT=15
 
@@ -37,19 +51,22 @@ vanadium_abi() {
 vanadium() {
 	local prebuilt=$1
 	# On arm64, refine the registry's default per device.
-	if [[ $ARCH = "arm64" ]]; then
+	if [[ "$ARCH" = "arm64" ]]; then
 		prebuilt=$(vanadium_abi)
 	fi
 	VW_VARIANT=$prebuilt
+	# provider_url for vanadium is a pure string — no network. The checksum is
+	# the only pre-download network call, so resolve it in the background and
+	# let a slow DNS ladder overlap the download instead of leaving the console
+	# silent after the selection. VW_SHA stays empty until
+	# download_install_webview() waits for it and still fails closed there.
 	VW_APK_URL=$(provider_url vanadium "$prebuilt")
 	VW_TRICHROME_APK_URL=""
-	VW_SHA=$(provider_sha vanadium "$prebuilt")
-	if [[ -z $VW_SHA ]]; then
-		echo "[$(date "+%H:%M:%S")] No content_sha256 for prebuilt/${prebuilt}/VanadiumWebView.apk" >>$LOG
-		ui_print "  Could not fetch the Vanadium checksum."
-		ui_print "  Refusing to install an unverified WebView."
-		clean_up 1
-	fi
+	VW_SHA=""
+	VW_SHA_FILE="$TMPDIR/open_webview.sha"
+	rm -f "$VW_SHA_FILE"
+	( provider_sha vanadium "$prebuilt" >"$VW_SHA_FILE" 2>/dev/null ) &
+	ui_print "  Resolving upstream checksum in the background..."
 	# Always system/app: /system/app is scanned on every ROM, and the stock
 	# WebView's own path is found via cmd package dump in replace_old_webview()
 	# (§8.10, §10.8).
@@ -62,7 +79,7 @@ cromite() {
 	# ChromePublic.apk, a browser), so $1 is arm64_SystemWebView.apk here;
 	# guard against an empty variant anyway.
 	local asset_name=$1
-	if [[ -z $asset_name ]]; then
+	if [[ -z "$asset_name" ]]; then
 		echo "[$(date "+%H:%M:%S")] cromite called without an asset name" >>$LOG
 		ui_print "  Internal error: no Cromite asset for this device."
 		clean_up 1
@@ -79,7 +96,7 @@ cromite() {
 	VW_APK_URL=$(provider_url cromite "$asset_name")
 	VW_TRICHROME_APK_URL=""
 	VW_SHA=$(provider_sha cromite "$asset_name")
-	if [[ -z $VW_SHA ]]; then
+	if [[ -z "$VW_SHA" ]]; then
 		echo "[$(date "+%H:%M:%S")] No sha256 digest for $asset_name in the latest Cromite release" >>$LOG
 		ui_print "  Could not fetch the Cromite checksum."
 		ui_print "  Refusing to install an unverified WebView."
@@ -93,7 +110,7 @@ thorium() {
 	# The registry maps arm64/arm to the SystemWebView release assets; guard
 	# against an empty variant anyway.
 	local asset_name=$1
-	if [[ -z $asset_name ]]; then
+	if [[ -z "$asset_name" ]]; then
 		echo "[$(date "+%H:%M:%S")] thorium called without an asset name" >>$LOG
 		ui_print "  Internal error: no Thorium asset for this device."
 		clean_up 1
@@ -110,7 +127,7 @@ thorium() {
 	VW_APK_URL=$(provider_url thorium "$asset_name")
 	VW_TRICHROME_APK_URL=""
 	VW_SHA=$(provider_sha thorium "$asset_name")
-	if [[ -z $VW_SHA ]]; then
+	if [[ -z "$VW_SHA" ]]; then
 		echo "[$(date "+%H:%M:%S")] No sha256 digest for $asset_name in the latest Thorium release" >>$LOG
 		ui_print "  Could not fetch the Thorium checksum."
 		ui_print "  Refusing to install an unverified WebView."
@@ -126,6 +143,9 @@ thorium() {
 # cannot drift. Every value the install resolves goes through here.
 say() {
 	ui_print "  $1"
+	# $MODPATH can be wiped mid-install (e.g. a second install run starts while
+	# this one is downloading); recreate it so the log write cannot fail.
+	mkdir -p "$MODPATH" 2>/dev/null
 	echo "[$(date "+%H:%M:%S")] $1" >>$LOG
 }
 
@@ -139,15 +159,21 @@ print_install_summary() {
 	say "Architecture: $ARCH, API $API"
 	say "Package:      $VW_PACKAGE"
 	say "Download:     $VW_APK_URL"
-	[[ -n $VW_TRICHROME_APK_URL ]] && say "Library:      $VW_TRICHROME_APK_URL"
+	[[ -n "$VW_TRICHROME_APK_URL" ]] && say "Library:      $VW_TRICHROME_APK_URL"
 	say "Saved to:     $dest/webview.apk"
 	say "Installs to:  $VW_SYSTEM_PATH/webview.apk"
-	if [[ -n $OVERLAY_APK_FILE ]]; then
+	if [[ -n "$OVERLAY_APK_FILE" ]]; then
 		say "Overlay:      ${OVERLAY_PATH:-(resolved after download)/}$OVERLAY_APK_FILE"
 	else
 		say "Overlay:      none"
 	fi
-	say "Checksum:     ${VW_SHA:-not verified}"
+	if [[ -n "$VW_SHA" ]]; then
+		say "Checksum:     $VW_SHA"
+	elif [[ -n "${VW_SHA_FILE:-}" ]]; then
+		say "Checksum:     resolving in background..."
+	else
+		say "Checksum:     not verified"
+	fi
 }
 
 download_file() {
@@ -157,7 +183,7 @@ download_file() {
 	local out="$DL_DIR/$1"
 	# The DNS ladder lives in dl() (providers.sh), shared with action.sh. It
 	# tests curl's exit status, not the output file: an interrupted transfer
-	# leaves a partial file behind, and both -f and -s accept it.
+	# leaves a partial file behind, and -f alone accepts it.
 	if ! dl "$2" "$out"; then
 		echo "[$(date "+%H:%M:%S")] Download failed" >>$LOG
 		ui_print ""
@@ -165,18 +191,34 @@ download_file() {
 		ui_print ""
 		clean_up 1
 	fi
+	# The download can take minutes; if $MODPATH was wiped meanwhile (e.g. a
+	# second install run started concurrently), recreate it so the log writes
+	# below cannot fail.
+	mkdir -p "$MODPATH" 2>/dev/null
 
 	# A finished transfer can still be a broken file: a captive portal or proxy
 	# error page answers 200 with HTML, and a truncated zip has no central
-	# directory. unzip -t rejects both, and needs no extra binary.
+	# directory. unzip -t rejects both, and needs no extra binary. When a
+	# provider checksum is available it is the authoritative gate (it runs in
+	# download_install_webview right after this), so a zip-test failure is only
+	# fatal on its own when there is no checksum to fall back on — busybox
+	# unzip has false-negatived on valid APKs before.
 	ui_print "  Verifying download..."
 	if ! unzip -t "$out" >/dev/null 2>&1; then
-		rm -f "$out"
-		echo "[$(date "+%H:%M:%S")] Downloaded file is not a valid zip" >>$LOG
-		ui_print ""
-		ui_print "  !!! Downloaded file is not a valid APK !!!"
-		ui_print ""
-		clean_up 1
+		local got_size got_sha
+		got_size=$(wc -c <"$out" 2>/dev/null)
+		got_sha=$(sha256_of "$out" 2>/dev/null | cut -d' ' -f1)
+		if [[ -n "$VW_SHA" ]]; then
+			echo "[$(date "+%H:%M:%S")] Zip test failed (size=${got_size:-?} sha256=${got_sha:-?}); the checksum will decide" >>$LOG
+			ui_print "  Zip test inconclusive, verifying checksum..."
+		else
+			echo "[$(date "+%H:%M:%S")] Downloaded file is not a valid zip (size=${got_size:-?} sha256=${got_sha:-?})" >>$LOG
+			rm -f "$out"
+			ui_print ""
+			ui_print "  !!! Downloaded file is not a valid APK !!!"
+			ui_print ""
+			clean_up 1
+		fi
 	fi
 	# system_server has to be able to open the APK (pm install reads it).
 	chmod 0644 "$out"
@@ -186,7 +228,7 @@ download_file() {
 check_integrity() {
 	local file=$1 expected=$2 calculated
 
-	if [[ ! -f $file ]]; then
+	if [[ ! -f "$file" ]]; then
 		echo "[$(date "+%H:%M:%S")] Integrity: file missing: $file" >>$LOG
 		ui_print "  Integrity check failed: download missing"
 		clean_up 1
@@ -199,14 +241,14 @@ check_integrity() {
 		clean_up 1
 		;;
 	esac
-	if [[ ${#expected} -ne 64 ]]; then
+	if [[ "${#expected}" -ne 64 ]]; then
 		echo "[$(date "+%H:%M:%S")] Integrity: hash is ${#expected} chars" >>$LOG
 		ui_print "  Integrity check failed: no usable checksum"
 		clean_up 1
 	fi
 
 	calculated=$(sha256_of "$file" | cut -d' ' -f1)
-	if [[ -z $calculated ]]; then
+	if [[ -z "$calculated" ]]; then
 		echo "[$(date "+%H:%M:%S")] Integrity: cannot compute sha256" >>$LOG
 		ui_print "  Integrity check failed: sha256sum not found"
 		clean_up 1
@@ -214,7 +256,7 @@ check_integrity() {
 	echo "[$(date "+%H:%M:%S")] SHA256SUM calculated: $calculated" >>$LOG
 	echo "[$(date "+%H:%M:%S")] SHA256SUM expected: $expected" >>$LOG
 
-	if [[ $calculated = $expected ]]; then
+	if [[ "$calculated" = "$expected" ]]; then
 		echo "[$(date "+%H:%M:%S")] Integrity checked" >>$LOG
 		ui_print "  Integrity checked!"
 	else
@@ -230,19 +272,24 @@ replace_old_webview() {
 	echo "[$(date "+%H:%M:%S")] Blanking the stock copy of $VW_PACKAGE" >>$LOG
 	local code_path
 	code_path=$(cmd package dump "$VW_PACKAGE" 2>/dev/null | grep codePath | head -n 1)
-	code_path=${code_path##*=}
+	code_path=${code_path##*codePath=}
 	# A codePath under /data/app is a user-installed update. Magisk mounts only
 	# system/, vendor/, product/ and system_ext/, so a .replace there is inert;
 	# the update has to be uninstalled first, then codePath re-read — the package
 	# reverts to its factory (system) copy.
-	if [[ "$code_path" == /data/app/* ]]; then
+	# case, not [[ == ]]: busybox ash pathname-expands the right-hand side of
+	# [[ == ]], so with any /data/app entry present the test dies with
+	# "unknown operand" and the branch is silently skipped.
+	case $code_path in
+	/data/app/*)
 		echo "[$(date "+%H:%M:%S")] $VW_PACKAGE has an update in $code_path; uninstalling the update" >>$LOG
 		ui_print "  Removing the installed update of $VW_PACKAGE..."
 		pm uninstall "$VW_PACKAGE" >/dev/null 2>&1
 		code_path=$(cmd package dump "$VW_PACKAGE" 2>/dev/null | grep codePath | head -n 1)
-		code_path=${code_path##*=}
-	fi
-	[[ -z $code_path ]] && return
+		code_path=${code_path##*codePath=}
+		;;
+	esac
+	[[ -z "$code_path" ]] && return
 	echo "[$(date "+%H:%M:%S")] Webview replaced: $code_path" >>$LOG
 	ui_print "  Replacing stock $VW_PACKAGE at $code_path"
 	mktouch "$MODPATH"$code_path/.replace
@@ -263,10 +310,11 @@ install_webview() {
 download_install_webview() {
 	# Fail in the first second if /data cannot hold the APK plus headroom.
 	mkdir -p "$DL_DIR"
+	mkdir -p "$MODPATH" 2>/dev/null
 	chmod 0755 "$DL_DIR"
 	local avail
 	avail=$(df -k /data | awk 'NR==2 {print $4}')
-	if [[ ${avail:-0} -lt 400000 ]]; then
+	if [[ "${avail:-0}" -lt 400000 ]]; then
 		echo "[$(date "+%H:%M:%S")] Not enough free space on /data: ${avail:-unknown} KB available, need ~400 MB" >>$LOG
 		ui_print "  Not enough free space on /data: need ~400 MB."
 		clean_up 1
@@ -274,11 +322,27 @@ download_install_webview() {
 
 	download_file webview.apk $VW_APK_URL
 
-	if [[ ! -z $VW_TRICHROME_APK_URL ]]; then
+	if [[ ! -z "$VW_TRICHROME_APK_URL" ]]; then
 		download_file trichrome.apk $VW_TRICHROME_APK_URL
 	fi
 
-	if [[ ! -z $VW_SHA ]]; then
+	# The checksum fetch started in the provider function overlaps the download;
+	# collect it now. Still fail closed: an unverified WebView is never installed.
+	if [[ -n "${VW_SHA_FILE:-}" ]]; then
+		wait
+		VW_SHA=$(cat "$VW_SHA_FILE" 2>/dev/null)
+		rm -f "$VW_SHA_FILE"
+		VW_SHA_FILE=""
+		if [[ -z "$VW_SHA" ]]; then
+			echo "[$(date "+%H:%M:%S")] No content_sha256 for prebuilt/$VW_VARIANT/VanadiumWebView.apk" >>$LOG
+			ui_print "  Could not fetch the upstream checksum."
+			ui_print "  Refusing to install an unverified WebView."
+			clean_up 1
+		fi
+		say "Checksum:     $VW_SHA"
+	fi
+
+	if [[ ! -z "$VW_SHA" ]]; then
 		ui_print "  Checking integrity..."
 		check_integrity "$DL_DIR/webview.apk" "$VW_SHA"
 	else
@@ -310,7 +374,7 @@ find_overlay_path() {
 		"/system/vendor/overlay:system/vendor/overlay/"; do
 		real=${candidate%%:*}
 		module=${candidate#*:}
-		if [[ -d $real ]]; then
+		if [[ -d "$real" ]]; then
 			OVERLAY_PATH=$module
 			echo "[$(date "+%H:%M:%S")] Overlay path: $real -> $module" >>$LOG
 			return
@@ -346,11 +410,13 @@ create_config_file() {
 	echo "VW_VERSION=${VW_VERSION}" >>$CONFIG_FILE
 }
 clean_up() {
-	if [[ $1 -eq 1 ]]; then
-		echo "[$(date "+%H:%M:%S")] Abort installation" >>$LOG
-		ui_print ""
-		cp_ch $LOG /sdcard/
-		abort "  Aborting..."
+	if [[ "$1" -eq 1 ]]; then
+		echo "[$(date "+%H:%M:%S")] Abort installation" >>$LOG 2>/dev/null
+		# abort() copies the log to /sdcard and prints where to report the
+		# error; it guards on the log existing because $MODPATH (and with it
+		# $LOG) can already be gone — e.g. a concurrent install wiped
+		# modules_update mid-run.
+		abort "  Installation failed — aborting..."
 	fi
 
 	ui_print "  Cleaning up..."
@@ -358,7 +424,7 @@ clean_up() {
 	echo "[$(date "+%H:%M:%S")] Installation success" >>$LOG
 }
 
-if [[ $API -lt 29 ]]; then
+if [[ "$API" -lt 29 ]]; then
 	ui_print "  Your android version is not supported"
 	ui_print "  Minimum android version supported: 10"
 	clean_up 1
@@ -367,6 +433,7 @@ fi
 # The header quotes module.prop instead of a literal, so it cannot go stale.
 MODULE_VERSION=$(sed -n 's/^version=//p' "$MODPATH/module.prop" 2>/dev/null | head -n 1)
 MODULE_VERSION_CODE=$(sed -n 's/^versionCode=//p' "$MODPATH/module.prop" 2>/dev/null | head -n 1)
+mkdir -p "$MODPATH" 2>/dev/null
 echo "# open-webview ${MODULE_VERSION:-unknown} (${MODULE_VERSION_CODE:-?})" > $LOG
 echo -e "# Author: @f3ffo (Github)\n" >>$LOG
 echo "[$(date "+%H:%M:%S")] Brand: $(getprop ro.product.system.brand)" >>$LOG
@@ -377,7 +444,7 @@ echo "[$(date "+%H:%M:%S")] Arch: $ARCH" >>$LOG
 echo "[$(date "+%H:%M:%S")] System name: $(getprop ro.product.system.name)" >>$LOG
 echo -e "[$(date "+%H:%M:%S")] Android Version: $(getprop ro.system.build.version.release)\n" >>$LOG
 
-if [[ ! $BOOTMODE ]]; then
+if [[ ! "$BOOTMODE" ]]; then
 	echo "[$(date "+%H:%M:%S")] Install through recovery NOT supported!" >>$LOG
 	ui_print "  Installing through recovery NOT supported!"
 	ui_print "  Install this module via Magisk Manager"
@@ -385,7 +452,9 @@ if [[ ! $BOOTMODE ]]; then
 fi
 
 AVAILABLE=$(available_providers)
-if [[ -z $AVAILABLE ]]; then
+# Quote it: busybox ash word-splits inside [[ ]], so an unquoted multi-line
+# $AVAILABLE makes the test fail with "sh: <line>: unknown operand".
+if [[ -z "$AVAILABLE" ]]; then
 	echo "[$(date "+%H:%M:%S")] No provider available for arch=$ARCH api=$API" >>$LOG
 	ui_print "  No WebView provider is available for $ARCH."
 	clean_up 1
@@ -413,10 +482,10 @@ while true; do
 	ui_print "    Vol+ = select, Vol- = next   (${MENU_TIMEOUT}s)"
 	chooseport $MENU_TIMEOUT
 	sel=$?
-	if [[ $sel -eq 0 ]]; then
+	if [[ "$sel" -eq 0 ]]; then
 		confirmed=1
 		break
-	elif [[ $sel -eq 1 ]]; then
+	elif [[ "$sel" -eq 1 ]]; then
 		index=$(( index + 1 ))
 		[ $index -gt $total ] && index=1
 	else
@@ -424,39 +493,44 @@ while true; do
 	fi
 done
 
-if [[ $confirmed -ne 1 ]]; then
+if [[ "$confirmed" -ne 1 ]]; then
 	ui_print ""
 	ui_print "  No selection made. Default: $label"
 	ui_print "    Install $label?  Vol+ = yes, Vol- = no   (${MENU_TIMEOUT}s)"
 	chooseport $MENU_TIMEOUT
-	if [[ $? -ne 0 ]]; then
+	if [[ "$?" -ne 0 ]]; then
 		echo "[$(date "+%H:%M:%S")] No webview selected" >>$LOG
 		abort "No webview selected!"
 	fi
 fi
 
+# Instant on-screen confirmation: the provider call below resolves the
+# upstream checksum over the network before the summary prints, so without
+# this the console sits silent right after the keypress.
+ui_print ""
+ui_print "  >> $label selected — installing..."
 echo "[$(date "+%H:%M:%S")] Selected $VW_PROVIDER ($VW_VARIANT) for $ARCH" >>$LOG
 "$VW_PROVIDER" "$VW_VARIANT"
 
-if [[ -f $CONFIG_FILE ]]; then
+if [[ -f "$CONFIG_FILE" ]]; then
 	echo "[$(date "+%H:%M:%S")] Remove old config file" >>$LOG
 	rm -rf $CONFIG_FILE
 fi
 
 # Probe the overlay path before the download: it reads the filesystem only,
 # and a missing overlay directory must not cost the whole download.
-if [[ ! -z $OVERLAY_APK_FILE ]]; then
+if [[ ! -z "$OVERLAY_APK_FILE" ]]; then
 	find_overlay_path
 fi
 
 print_install_summary
 
-if [[ $IS_MINIMAL_INSTALLATION -eq 0 ]]; then
+if [[ "$IS_MINIMAL_INSTALLATION" -eq 0 ]]; then
 	download_install_webview
 fi
 
 # Only install the overlay if the webview supports it
-if [[ ! -z $OVERLAY_APK_FILE ]]; then
+if [[ ! -z "$OVERLAY_APK_FILE" ]]; then
 	create_overlay
 	force_overlay
 	if [[ ! -f "$MODPATH"/$OVERLAY_PATH$OVERLAY_APK_FILE ]]; then

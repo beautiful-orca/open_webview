@@ -1,10 +1,29 @@
 #!/system/bin/sh
+# Modern Magisk never exports NVBASE to update-binary (only the old
+# module_installer.sh did). Without this, INFO below becomes /modules/.open_webview-files
+# and every cp_ch backup write fails with "nonexistent directory".
+[ -z "$NVBASE" ] && NVBASE=/data/adb
+
 cleanup() {
   rm -rf $MODPATH/common 2>/dev/null
 }
 
 abort() {
   ui_print "$1"
+  ui_print ""
+  # Every failure path ends here: hand the install log to the user and point
+  # at the issue tracker, with the caveat that a fix is not guaranteed.
+  # $LOG is only set once common/install.sh has run, and $MODPATH (and with
+  # it the log) can already be gone — e.g. a concurrent install wiped
+  # modules_update mid-run — so guard on both before copying.
+  if [ -n "$LOG" ] && [ -f "$LOG" ] && cp_ch $LOG /sdcard/ 2>/dev/null; then
+    ui_print "  Install log saved to /sdcard/webview.log"
+    ui_print ""
+  fi
+  ui_print "  To report this error, open an issue on GitHub and include"
+  ui_print "  the install log:"
+  ui_print "  https://github.com/beautiful-orca/open_webview/issues"
+  ui_print "  There is no guarantee that a reported issue can be fixed."
   rm -rf $MODPATH 2>/dev/null
   cleanup
   rm -rf $TMPDIR 2>/dev/null
@@ -194,9 +213,12 @@ if [ -f "$MODPATH/common/tools/tools.tar.xz" ]; then
 	# Extract only the target architecture: the archive holds all four
 	# (~12 MB raw), one is ever used. $ARCH is the ABI name since the x64
 	# normalisation in customize.sh, which matches the member names.
-	# clean_up is defined in install.sh, sourced later — a failure here is
-	# caught by the curl smoke test right below.
-	tar -xf "$MODPATH/common/tools/tools.tar.xz" -C "$MODPATH/common/tools" "$ARCH/" || clean_up 1
+	# install-binaries.sh packs the arch dirs by name, so members are
+	# "arm64/" etc.; the "./$ARCH/" fallback covers an archive packed from
+	# "." (members "./arm64/..."), which a literal member match never finds.
+	# A total failure is caught by the curl smoke test right below.
+	tar -xf "$MODPATH/common/tools/tools.tar.xz" -C "$MODPATH/common/tools" "$ARCH/" 2>/dev/null ||
+		tar -xf "$MODPATH/common/tools/tools.tar.xz" -C "$MODPATH/common/tools" "./$ARCH/"
 fi
 # curl binary: a variable, not an alias, so the download ladder in install.sh
 # can pass per-attempt DNS flags and the call stays testable off-device.

@@ -63,6 +63,11 @@ unzip -qjo "$ZIPFILE" 'common/functions.sh' -d $TMPDIR >&2
 # ABI name. Normalise once, here, before anything reads $ARCH.
 [ "$ARCH" = "x64" ] && ARCH=x86_64
 
+# Modern Magisk never exports NVBASE to update-binary (only the old
+# module_installer.sh did), so without this every $NVBASE path below collapses
+# to /modules/... and writes fail with "nonexistent directory".
+[ -z "$NVBASE" ] && NVBASE=/data/adb
+
 # Detect a previous install before anything is extracted: while an upgrade
 # runs, $MODPATH is the modules_update copy and the old module is still in
 # modules/. Read-only; nothing on the device changes yet.
@@ -112,6 +117,33 @@ fi
 
 # Runs late, only when the install above succeeded (a failed download aborts
 # the shell before this line).
-if [[ $IS_UPGRADE -eq 1 ]]; then
+if [[ "$IS_UPGRADE" -eq 1 ]]; then
   migrate_previous_install
 fi
+
+##########################################################################################
+# Success message
+##########################################################################################
+
+# Magisk appends only a bare "Done" after the module's output, so the module
+# states itself what a successful install means. $label, $VW_PROVIDER,
+# $VW_VARIANT, $VW_PACKAGE and $VW_VERSION are set by common/install.sh, which
+# functions.sh sourced above in this same shell. This block runs last, so it
+# is the final output the user sees before Magisk's "Done".
+ui_print ""
+ui_print "  ============================================"
+ui_print "    Installation successful!"
+ui_print "  ============================================"
+ui_print "  WebView:  ${label:-${VW_PROVIDER:-unknown}} (${VW_PACKAGE:-unknown})"
+if [[ -n "${VW_VERSION:-}" ]]; then
+  ui_print "  Version:  $VW_VERSION"
+fi
+ui_print ""
+ui_print "  - Restart the device: the new WebView only takes"
+ui_print "    effect after a reboot."
+ui_print "  - The WebView implementation can be chosen in the"
+ui_print "    Developer options of Android."
+ui_print "  - The WebView can be updated later with this"
+ui_print "    module's action button in the Magisk app."
+ui_print ""
+echo "[$(date "+%H:%M:%S")] Success: ${VW_PROVIDER:-?} (${VW_VARIANT:-?}) installed as ${VW_PACKAGE:-?}; reboot required" >>$LOG 2>/dev/null
