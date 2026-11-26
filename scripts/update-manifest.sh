@@ -1,6 +1,6 @@
 #!/bin/sh
 # update-manifest.sh — rewrite common/tools/VERSIONS.json from the installed
-# curl binary and generate the pull-request body. Plan: CI-BINARIES.md §3, §8.
+# curl binary and generate the pull-request body. Pipeline: common/tools/README.md.
 #
 # Usage: update-manifest.sh <curl-dir>
 #   Run after install-binaries.sh; the manifest records what is now installed.

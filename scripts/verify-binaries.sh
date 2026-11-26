@@ -1,6 +1,6 @@
 #!/bin/sh
 # verify-binaries.sh — verification gate for the update-binaries workflow.
-# Plan: CI-BINARIES.md §6. Nothing is installed or committed unless every
+# Pipeline: common/tools/README.md. Nothing is installed or committed unless every
 # check passes; if any gate fails the job fails and no PR is opened.
 #
 # Scope: curl only. aapt2/zipsigner are deliberately not covered — PROJECT-NOTES

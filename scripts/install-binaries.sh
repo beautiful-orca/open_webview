@@ -1,6 +1,6 @@
 #!/bin/sh
 # install-binaries.sh — copy verified curl artifacts into common/tools/.
-# Plan: CI-BINARIES.md §5. Run after verify-binaries.sh has passed.
+# Pipeline: common/tools/README.md. Run after verify-binaries.sh has passed.
 #
 # Usage: install-binaries.sh <curl-dir>
 #

@@ -1,4 +1,4 @@
-# Monthly refresh of the bundled curl binary. Plan: CI-BINARIES.md, scoped to
+# Monthly refresh of the bundled curl binary. Pipeline: common/tools/README.md, scoped to
 # curl only: PROJECT-NOTES §13.6 (decided 2026-11-22) moves aapt2 to the SDK's
 # build-tools on the build machine and §12.9 deletes the bundled aapt2 and
 # zipsigner copies, so there is nothing else here to keep current.
