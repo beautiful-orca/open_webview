@@ -1,26 +1,34 @@
 #!/system/bin/sh
-webviews=(
-    ".com.android.webview"
-    ".app.vanadium.webview"
-)
+# Idempotent: every step is safe to run twice and on a device that never had
+# the module installed.
 
-webview_directory=""
-for file in "${webviews[@]}"; do
-    webview_directory=$(find /data/app/ -type d -name "*$file*" | head -n 1)
-    if [ -n "$webview_directory" ]; then
-        break
-    fi
-done
+# The WebView cleanup runs in a background subshell after boot completes:
+# pm path needs PackageManager up, and system_server owns overlays.xml.
+(
+  # Wait for boot to complete. resetprop -w sys.boot_completed 1 waits until
+  # the property becomes 1; waiting on 0 returns immediately because the
+  # property is unset during boot (§14.7).
+  resetprop -w sys.boot_completed 1 2>/dev/null
 
-if [ -n "$webview_directory" ]; then
-    rm -rf "$webview_directory"
-fi
+  # Remove the /data/app updates and data dirs of the providers this module
+  # can install. pm path is authoritative — the old find with a leading-dot
+  # pattern ("*.com.android.webview*") never matched a real path (§2.8 #15).
+  for pkg in com.android.webview app.vanadium.webview; do
+    pm path "$pkg" 2>/dev/null | sed -n 's/^package://p' | while read -r apk; do
+      case $apk in
+      /data/app/*) rm -rf "$(dirname "$apk")" 2>/dev/null ;;
+      esac
+    done
+    rm -rf "/data/data/$pkg" 2>/dev/null
+  done
 
-for directory in "${webviews[@]}"; do
-    if [ -d "/data/data/$directory" ]; then
-        rm -rf "/data/data/$directory"
-    fi
-done
+  # Best-effort: remove the stale overlay entry the old post-fs-data.sh wrote.
+  # Harmless if system_server rewrites the file first — the overlay APK is
+  # gone with the module, so the entry points nowhere.
+  if [ -f /data/system/overlays.xml ]; then
+    sed -i 's|<item packageName="app.vanadium.WebviewOverlay"[^>]*/>||' /data/system/overlays.xml
+  fi
+) &
 
 # Don't modify anything after this
 if [ -f $INFO ]; then
