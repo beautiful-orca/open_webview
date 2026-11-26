@@ -3,7 +3,6 @@ SKIP_INSTALLATION=1
 # To get the latest Vanadium version change ANDROID_VANADIUM_VERSION to the current version of https://gitlab.com/grapheneos/platform_external_vanadium
 # Check the URL of the prebuilt folder, eg. https://gitlab.com/grapheneos/platform_external_vanadium/-/tree/16-qpr2/prebuilt?ref_type=heads, 16-qpr2 is latest version
 ANDROID_VANADIUM_VERSION=17
-OVERLAY_API=29
 OVERLAY_APK_FILE="WebviewOverlay.apk"
 IS_REINSTALL=0
 CONFIG_FILE="$MODPATH"/.webview
@@ -52,7 +51,7 @@ vanadium() {
 	VW_SYSTEM_PATH=$(get_system_path_according_to_rom)/VanadiumWebview
 	VW_PACKAGE="app.vanadium.webview"
 	VW_OVERLAY_PACKAGE="app.vanadium.WebviewOverlay"
-	OVERLAY_ZIP_FILE="vanadium-overlay${OVERLAY_API}.zip"
+	OVERLAY_APK_FILE="WebviewOverlay.apk"
 }
 cromite() {
 	VW_APK_URL=https://github.com/uazo/cromite/releases/download/$(get_version_github "uazo/cromite" "${ARCH}_SystemWebView.apk")/${ARCH}_SystemWebView.apk
@@ -61,7 +60,7 @@ cromite() {
 	VW_SYSTEM_PATH="$(get_system_path_according_to_rom)/CromiteWebview"
 	VW_PACKAGE="cromite"
 	VW_OVERLAY_PACKAGE=""
-	OVERLAY_ZIP_FILE=""
+	OVERLAY_APK_FILE=""
 }
 download_file() {
 	ui_print "  Downloading $1..."
@@ -154,20 +153,9 @@ download_install_webview() {
 	install_webview
 }
 create_overlay() {
-	echo "[$(date "+%H:%M:%S")] Create overlay" >>$LOG
-	ui_print "  Creating overlay..."
-	unzip -qo "$MODPATH"/overlays/$OVERLAY_ZIP_FILE -d "$MODPATH"/overlays/overlay >&2
-	MODTMPDIR="$(mktemp -d)"
-	if [ -n "$MODTMPDIR" ] && [ -d "$MODTMPDIR" ]; then
-		aapt2 compile -v --dir "$MODPATH"/overlays/overlay/res -o "$MODTMPDIR" && \
-			aapt2 link -o "$MODPATH"/unsigned.apk -I /system/framework/framework-res.apk --manifest "$MODPATH"/overlays/overlay/AndroidManifest.xml "$MODTMPDIR"/* >&2
-		rm -rf "$MODTMPDIR"
-	fi
-}
-sign_framework_res() {
-	echo "[$(date "+%H:%M:%S")] Sign modified framework-res" >>$LOG
-	sign "$MODPATH"/unsigned.apk "$MODPATH"/signed.apk
-	mv -f "$MODPATH"/signed.apk "$MODPATH"/common/$OVERLAY_APK_FILE
+	echo "[$(date \"+%H:%M:%S\")] Create overlay" >>$LOG
+	ui_print "  Installing overlay..."
+	cp_ch "$MODPATH"/overlays/$OVERLAY_APK_FILE "$MODPATH"/common/$OVERLAY_APK_FILE
 }
 find_overlay_path() {
 	echo "[$(date "+%H:%M:%S")] Finding overlay path" >>$LOG
@@ -219,7 +207,6 @@ clean_up() {
 	fi
 
 	ui_print "  Cleaning up..."
-	rm -rf "$MODPATH"/overlays/overlay
 	ui_print "  !!! Dalvik cache will be cleared next boot."
 	ui_print "  !!! Boot time may be longer."
 	echo "[$(date "+%H:%M:%S")] Installation success" >>$LOG
@@ -246,10 +233,6 @@ if [[ ! $BOOTMODE ]]; then
 	ui_print "  Installing through recovery NOT supported!"
 	ui_print "  Install this module via Magisk Manager"
 	clean_up 1
-fi
-
-if [[ $API -lt 29 ]]; then
-	OVERLAY_API=28
 fi
 
 ui_print "  Choose between:"
@@ -309,16 +292,9 @@ if [[ $IS_MINIMAL_INSTALLATION -eq 0 ]]; then
 	download_install_webview
 fi
 
-# Only create overlay if the webview supports it
-if [[ ! -z $OVERLAY_ZIP_FILE ]]; then
+# Only install the overlay if the webview supports it
+if [[ ! -z $OVERLAY_APK_FILE ]]; then
 	create_overlay
-	if [[ ! -f "$MODPATH"/unsigned.apk ]]; then
-		ui_print ""
-		ui_print "  !!! Overlay creation has failed !!!"
-		ui_print ""
-		clean_up 1
-	fi
-	sign_framework_res
 	find_overlay_path
 	force_overlay
 	if [[ ! -f "$MODPATH"/$OVERLAY_PATH$OVERLAY_APK_FILE ]]; then
