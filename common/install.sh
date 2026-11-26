@@ -89,6 +89,39 @@ cromite() {
 	VW_PACKAGE="com.android.webview"
 	OVERLAY_APK_FILE=""
 }
+thorium() {
+	# The registry maps arm64/arm to the SystemWebView release assets; guard
+	# against an empty variant anyway.
+	local asset_name=$1
+	if [[ -z $asset_name ]]; then
+		echo "[$(date "+%H:%M:%S")] thorium called without an asset name" >>$LOG
+		ui_print "  Internal error: no Thorium asset for this device."
+		clean_up 1
+	fi
+	VW_VARIANT=$asset_name
+	# One releases/latest call resolves both the tag and the asset digest;
+	# prefetch in this shell so the two command substitutions below hit the
+	# github_latest cache instead of paying the API call twice.
+	provider_prefetch thorium "$asset_name" || {
+		echo "[$(date "+%H:%M:%S")] Could not resolve the latest Thorium release" >>$LOG
+		ui_print "  Could not resolve the latest Thorium release."
+		clean_up 1
+	}
+	VW_APK_URL=$(provider_url thorium "$asset_name")
+	VW_TRICHROME_APK_URL=""
+	VW_SHA=$(provider_sha thorium "$asset_name")
+	if [[ -z $VW_SHA ]]; then
+		echo "[$(date "+%H:%M:%S")] No sha256 digest for $asset_name in the latest Thorium release" >>$LOG
+		ui_print "  Could not fetch the Thorium checksum."
+		ui_print "  Refusing to install an unverified WebView."
+		clean_up 1
+	fi
+	# com.thorium.webview is not a stock WebView package, so the overlay entry
+	# shipped in WebviewOverlay.apk is what makes it selectable.
+	VW_SYSTEM_PATH=system/app/ThoriumWebview
+	VW_PACKAGE="com.thorium.webview"
+	OVERLAY_APK_FILE="WebviewOverlay.apk"
+}
 # Print to the installer console and to webview.log in one call, so the two
 # cannot drift. Every value the install resolves goes through here.
 say() {

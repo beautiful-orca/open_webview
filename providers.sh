@@ -12,18 +12,20 @@
 ANDROID_VANADIUM_VERSION=17
 GITLAB_VANADIUM=40905333
 
-# Cache for cromite_latest(); empty until the first releases/latest call.
-CROMITE_TAG=""
-CROMITE_SHA=""
+# Cache for github_latest(): one releases/latest call per repo+asset.
+GH_LATEST_KEY=""
+GH_LATEST_TAG=""
+GH_LATEST_SHA=""
 
 # id | label | min_api | arch:variant ...
 # Order is the menu order; the first entry is the default when nobody answers.
 # Keys are $ARCH after the x64->x86_64 normalisation in customize.sh, i.e. ABI
 # names. The variant is provider-specific: Vanadium's is a prebuilt directory,
-# Cromite's is a release asset filename.
+# Cromite's and Thorium's are GitHub release asset filenames.
 PROVIDERS='
 vanadium|Vanadium|29|arm64:arm64-multilib x86_64:x86_64
 cromite|Cromite|29|arm64:arm64_SystemWebView.apk
+thorium|Thorium|29|arm64:SystemWebView_arm64.apk arm:SystemWebView_arm32.apk
 '
 
 # Prints "id|label|variant" for every provider this device can run, in registry order.
@@ -94,25 +96,38 @@ get_sha_gitlab_lfs() {
 		cut -d":" -f2
 }
 
+# The GitHub repo a provider's release assets come from.
+provider_repo() {
+	case $1 in
+	cromite) echo "uazo/cromite" ;;
+	thorium) echo "gz83/thorium" ;;
+	esac
+}
+
 # One releases/latest call returning both the tag and the asset digest, cached
-# in CROMITE_TAG/CROMITE_SHA. Replaces get_version_github(), which fetched the
-# whole release list just to find one tag. The name-before-digest ordering in
-# GitHub's asset JSON is not contractual — the 64-hex length check is what
+# per repo+asset in GH_LATEST_*. Replaces get_version_github(), which fetched
+# the whole release list just to find one tag. The name-before-digest ordering
+# in GitHub's asset JSON is not contractual — the 64-hex length check is what
 # turns a reordering into a loud failure instead of a silent skip.
-cromite_latest() {
-	[ -n "$CROMITE_TAG" ] && [ -n "$CROMITE_SHA" ] && return 0
-	local json
+github_latest() {
+	local repo=$1 want=$2 json
+	local key="$repo/$want"
+	[ "$GH_LATEST_KEY" = "$key" ] && [ -n "$GH_LATEST_SHA" ] && return 0
 	json=$("$CURL_BIN" -sfL --connect-timeout 15 --max-time 60 \
-		"https://api.github.com/repos/uazo/cromite/releases/latest") || return 1
-	CROMITE_TAG=$(printf '%s\n' "$json" |
+		"https://api.github.com/repos/$repo/releases/latest") || return 1
+	GH_LATEST_TAG=$(printf '%s\n' "$json" |
 		sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)
-	CROMITE_SHA=$(printf '%s\n' "$json" | awk -v want="$1" '
+	GH_LATEST_SHA=$(printf '%s\n' "$json" | awk -v want="$want" '
 		/"name": *"/ { n = $0; sub(/.*"name": *"/, "", n); sub(/".*/, "", n) }
 		/"digest": *"sha256:/ {
 			d = $0; sub(/.*sha256:/, "", d); sub(/".*/, "", d)
 			if (n == want) { print d; exit }
 		}')
-	[ ${#CROMITE_SHA} -eq 64 ]
+	if [ ${#GH_LATEST_SHA} -eq 64 ] && [ -n "$GH_LATEST_TAG" ]; then
+		GH_LATEST_KEY=$key
+		return 0
+	fi
+	return 1
 }
 
 # Warm the upstream cache in the caller's shell. Callers resolve url/sha
@@ -120,20 +135,24 @@ cromite_latest() {
 # provider_sha would each pay the API call again.
 provider_prefetch() {
 	case $1 in
-	cromite) cromite_latest "$2" || return 1 ;;
+	cromite|thorium)
+		github_latest "$(provider_repo "$1")" "$2" || return 1
+		;;
 	esac
 }
 
 # The upstream download URL for a provider's variant. Returns 1 when the
 # provider is unknown or its release cannot be resolved.
 provider_url() {
+	local repo
 	case $1 in
 	vanadium)
 		echo "https://gitlab.com/api/v4/projects/$GITLAB_VANADIUM/repository/files/prebuilt%2F${2}%2FVanadiumWebView.apk/raw?ref=${ANDROID_VANADIUM_VERSION}"
 		;;
-	cromite)
-		cromite_latest "$2" || return 1
-		echo "https://github.com/uazo/cromite/releases/download/$CROMITE_TAG/$2"
+	cromite|thorium)
+		repo=$(provider_repo "$1")
+		github_latest "$repo" "$2" || return 1
+		echo "https://github.com/$repo/releases/download/$GH_LATEST_TAG/$2"
 		;;
 	esac
 }
@@ -141,14 +160,16 @@ provider_url() {
 # The upstream sha256 for a provider's variant. Empty when it cannot be read;
 # callers fail closed on that rather than skipping verification.
 provider_sha() {
+	local repo
 	case $1 in
 	vanadium)
 		get_sha_gitlab "$GITLAB_VANADIUM" \
 			"prebuilt%2F${2}%2FVanadiumWebView.apk?ref=${ANDROID_VANADIUM_VERSION}"
 		;;
-	cromite)
-		cromite_latest "$2" || return 1
-		echo "$CROMITE_SHA"
+	cromite|thorium)
+		repo=$(provider_repo "$1")
+		github_latest "$repo" "$2" || return 1
+		echo "$GH_LATEST_SHA"
 		;;
 	esac
 }

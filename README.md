@@ -16,7 +16,7 @@ This module helps you to replace your system webview though Magisk.
 ## Compatibility
 
 - S.O.:
-    - minimum: Android 8+
+    - minimum: Android 10+ (API 29, every provider is a Chromium fork)
     - recommended: Android 13+
 - Magisk 20.4+
 - KernelSU 0.6+
@@ -45,15 +45,16 @@ You can contribute pull requests or support the original author.
 
 ## Features
 
-**ATTENTION!** This module cannot automatically update the webview, so if you want to update a webview installed through this module you must manually reinstall the module.
-
-- Works on any device running Android 8.0+ and Magisk 20.4+
+- Works on any device running Android 10+ (API 29+) and Magisk 20.4+
 - Replace the webview with one of:
     1. ~~[Bromite](https://github.com/bromite/bromite)~~ (Deprecated, removed)
     2. ~~[Mulch](https://gitlab.com/divested-mobile/mulch)~~ (Deprecated, removed)
     3. [Vanadium](https://gitlab.com/grapheneos/platform_external_vanadium) (frequent chromium updates)
-    4. ~~[Thorium](https://github.com/Alex313031/Thorium-Android)~~ (Deprecated, removed)
-    5. [Cromite](https://github.com/uazo/cromite) (last update: Sep 15 2026, v153.0.8010.37, old chromium version may be a security risk)
+    4. [Thorium](https://github.com/gz83/thorium) (arm64 and arm32 only)
+    5. [Cromite](https://github.com/uazo/cromite) (arm64 only; last update: Sep 15 2026, v153.0.8010.37, old chromium version may be a security risk)
+- The module's action button in the Magisk app updates the installed webview to the
+  current upstream build of the same provider — no re-flash, no reboot. To switch to
+  a different provider, reinstall the module and pick it in the menu.
 
 ## Create module
 
@@ -70,7 +71,7 @@ You can contribute pull requests or support the original author.
 - [Bromite](https://github.com/bromite/bromite)
 - [Vanadium by GrapheneOS](https://gitlab.com/grapheneos/platform_external_vanadium)
 - [Mulch by DivestOS](https://gitlab.com/divested-mobile/mulch)
-- [Thorium by Alex313031](https://github.com/Alex313031/thorium)
+- [Thorium by Alex313031](https://github.com/Alex313031/thorium) (Android builds from [gz83/thorium](https://github.com/gz83/thorium))
 - [cUrl](https://github.com/curl/curl)
 - [cUrl binary](https://github.com/F3FFO/compile_zlib_openssl_curl_android)
 - [Cromite by uazo](https://github.com/uazo/cromite)

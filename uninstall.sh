@@ -24,7 +24,7 @@ VW_PACKAGE=$(sed -n 's/^VW_PACKAGE=//p' "$MODPATH/.webview" 2>/dev/null | head -
   # Remove the /data/app updates and data dirs of the providers this module
   # can install. pm path is authoritative — the old find with a leading-dot
   # pattern ("*.com.android.webview*") never matched a real path (§2.8 #15).
-  for pkg in com.android.webview app.vanadium.webview; do
+  for pkg in com.android.webview app.vanadium.webview com.thorium.webview; do
     pm path "$pkg" 2>/dev/null | sed -n 's/^package://p' | while read -r apk; do
       case $apk in
       /data/app/*) rm -rf "$(dirname "$apk")" 2>/dev/null ;;
