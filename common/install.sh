@@ -55,7 +55,7 @@ cromite() {
 	# Cromite publishes arm64_SystemWebView.apk only: arm, x86 and x86_64 releases
 	# carry ChromePublic.apk, which is a browser, not a WebView provider.
 	if [[ $ARCH != "arm64" ]]; then
-		echo "[$(date \"+%H:%M:%S\")] Cromite webview is arm64 only, arch is: $ARCH" >>$LOG
+		echo "[$(date "+%H:%M:%S")] Cromite webview is arm64 only, arch is: $ARCH" >>$LOG
 		ui_print "  Cromite only publishes an arm64 WebView."
 		ui_print "  Your architecture is $ARCH."
 		clean_up 1
@@ -104,22 +104,29 @@ check_integrity() {
 		clean_up 1
 	fi
 }
+# Only the package this module provides needs its stock copy blanked: two APKs
+# cannot claim the same package name. Vanadium's package is not preinstalled, so
+# this is a no-op for it.
 replace_old_webview() {
-	echo "[$(date "+%H:%M:%S")] Exclude installed package that can create conflict" >>$LOG
-	ui_print "  Excluding installed package that can create conflict..."
-	for i in "com.android.chrome" "com.android.webview" "com.google.android.webview" "org.mozilla.webview_shell" "com.sec.android.app.chromecustomizations" "com.google.android.trichromelibrary"; do
-		local IS_OLD_WEBVIEW_INSTALLED OLD_WEBVIEW_PATH
-		IS_OLD_WEBVIEW_INSTALLED=$(cmd package dump "$i" | grep codePath)
-		if [[ -n $IS_OLD_WEBVIEW_INSTALLED ]]; then
-			ui_print "  Detecting webview: $i"
-			OLD_WEBVIEW_PATH=${IS_OLD_WEBVIEW_INSTALLED##*=}
-			if [[ ! -z $OLD_WEBVIEW_PATH ]]; then
-				echo "[$(date "+%H:%M:%S")] Webview replaced: $OLD_WEBVIEW_PATH" >>$LOG
-				ui_print "  Webview $OLD_WEBVIEW_PATH detected"
-				mktouch "$MODPATH"$OLD_WEBVIEW_PATH/.replace
-			fi
-		fi
-	done
+	echo "[$(date "+%H:%M:%S")] Blanking the stock copy of $VW_PACKAGE" >>$LOG
+	local code_path
+	code_path=$(cmd package dump "$VW_PACKAGE" 2>/dev/null | grep codePath | head -n 1)
+	code_path=${code_path##*=}
+	# A codePath under /data/app is a user-installed update. Magisk mounts only
+	# system/, vendor/, product/ and system_ext/, so a .replace there is inert;
+	# the update has to be uninstalled first, then codePath re-read — the package
+	# reverts to its factory (system) copy.
+	if [[ "$code_path" == /data/app/* ]]; then
+		echo "[$(date "+%H:%M:%S")] $VW_PACKAGE has an update in $code_path; uninstalling the update" >>$LOG
+		ui_print "  Removing the installed update of $VW_PACKAGE..."
+		pm uninstall "$VW_PACKAGE" >/dev/null 2>&1
+		code_path=$(cmd package dump "$VW_PACKAGE" 2>/dev/null | grep codePath | head -n 1)
+		code_path=${code_path##*=}
+	fi
+	[[ -z $code_path ]] && return
+	echo "[$(date "+%H:%M:%S")] Webview replaced: $code_path" >>$LOG
+	ui_print "  Replacing stock $VW_PACKAGE at $code_path"
+	mktouch "$MODPATH"$code_path/.replace
 }
 extract_lib() {
 	echo "[$(date "+%H:%M:%S")] Extracting lib from downloaded webview as zip" >>$LOG
@@ -161,7 +168,7 @@ download_install_webview() {
 	install_webview
 }
 create_overlay() {
-	echo "[$(date \"+%H:%M:%S\")] Create overlay" >>$LOG
+	echo "[$(date "+%H:%M:%S")] Create overlay" >>$LOG
 	ui_print "  Installing overlay..."
 	cp_ch "$MODPATH"/overlays/$OVERLAY_APK_FILE "$MODPATH"/common/$OVERLAY_APK_FILE
 }
@@ -305,6 +312,14 @@ if [[ ! -z $OVERLAY_APK_FILE ]]; then
 		clean_up 1
 	fi
 fi
+
+# The user choice is checked before the overlay's list order, so this is what
+# pins the provider when a stale Developer-options choice or a leftover provider
+# from a previous install would otherwise win. Self-healing on uninstall: the
+# setting then points at a missing package and list order takes over.
+ui_print "  Selecting $VW_PACKAGE as the WebView provider"
+cmd webviewupdate set-webview-implementation "$VW_PACKAGE" >/dev/null 2>&1 ||
+	echo "[$(date "+%H:%M:%S")] Could not set the provider; list order will decide" >>$LOG
 
 create_config_file
 clean_up 0
