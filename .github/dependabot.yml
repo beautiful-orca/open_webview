@@ -3,10 +3,11 @@
 # v7, actions/setup-java@v4 -> v6, ...). All action updates are grouped into a
 # single PR so one merge keeps every workflow current.
 #
-# Nothing else in the repo has a datasource, by design: the Android SDK
-# packages (build-tools;36.0.0, platforms;android-35) are pinned in the
-# workflow steps and stay manual, and the bundled curl is refreshed by
-# .github/workflows/update-binaries.yml on its own monthly schedule.
+# Nothing else in the repo has a Dependabot datasource: the Android SDK
+# package pins (build-tools, platforms) are watched by
+# .github/workflows/sdk-packages.yml instead, and the bundled curl is
+# refreshed by .github/workflows/update-binaries.yml on its own monthly
+# schedule.
 #
 # This file only configures Dependabot — "Dependabot version updates" must
 # also be enabled in the repo's Settings -> Security on GitHub.

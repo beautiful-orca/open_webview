@@ -1,0 +1,142 @@
+# Weekly watch on the Android SDK package pins in .github/workflows/overlay.yml
+# (build-tools;X.Y.Z, platforms;android-N) and the matching android.jar default in
+# overlays/build.sh. Dependabot has no datasource for sdkmanager packages, so this
+# does the job itself: poll Google's repository XML, and open a PR when the newest
+# stable build-tools or platform moved.
+#
+# Only stable releases are considered: the strict path regexes exclude -rcN
+# build-tools and canary/UpsideDownCake platforms.
+#
+# Gate before any PR: the new pins must install with the runner's own sdkmanager
+# and rebuild the overlay with content identical to the committed
+# overlays/WebviewOverlay.apk (compiled XML sha256 + versionCode). A toolchain
+# bump that changes the compiled bytes fails the run instead of shipping —
+# rerun build-overlay by hand in that case. Verified 2026-11-26: build-tools
+# 37.0.0 + platforms;android-36 rebuild the committed APK with identical
+# content.
+#
+# Same caveats as the other scheduled workflows: cron is UTC and best-effort,
+# scheduled workflows run only from the default branch and are disabled after
+# 60 days without repository activity, and workflow_dispatch stays available.
+
+name: Watch Android SDK packages
+
+on:
+  schedule:
+    - cron: '0 6 * * 2'   # 06:00 UTC every Tuesday
+  workflow_dispatch:
+
+permissions:
+  contents: write        # push the branch
+  pull-requests: write   # open the PR
+
+concurrency:
+  group: sdk-packages
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect latest stable build-tools and platform
+        id: detect
+        run: |
+          set -euo pipefail
+          : > /tmp/repos.xml
+          for f in repository2-4.xml repository2-3.xml; do
+            curl -fsS "https://dl.google.com/android/repository/$f" >> /tmp/repos.xml || true
+          done
+          [ -s /tmp/repos.xml ] || { echo "::error::could not fetch the SDK repository XML"; exit 1; }
+          bt=$(grep -o 'path="build-tools;[0-9]*\.[0-9]*\.[0-9]*"' /tmp/repos.xml \
+            | sed 's/path="build-tools;//;s/"//' | sort -Vu | tail -1)
+          pl=$(grep -o 'path="platforms;android-[0-9]*"' /tmp/repos.xml \
+            | sed 's/path="platforms;android-//;s/"//' | sort -Vu | tail -1)
+          cur_bt=$(sed -n 's/.*build-tools;\([0-9.]*\).*/\1/p' .github/workflows/overlay.yml | head -1)
+          cur_pl=$(sed -n 's/.*platforms;android-\([0-9]*\).*/\1/p' .github/workflows/overlay.yml | head -1)
+          [ -n "$bt" ] && [ -n "$pl" ] && [ -n "$cur_bt" ] && [ -n "$cur_pl" ] || {
+            echo "::error::could not parse pins (bt='$bt' pl='$pl' cur_bt='$cur_bt' cur_pl='$cur_pl')"; exit 1; }
+          echo "current: build-tools;$cur_bt platforms;android-$cur_pl"
+          echo "latest:  build-tools;$bt platforms;android-$pl"
+          echo "bt=$bt" >> "$GITHUB_OUTPUT"
+          echo "pl=$pl" >> "$GITHUB_OUTPUT"
+          echo "cur_bt=$cur_bt" >> "$GITHUB_OUTPUT"
+          echo "cur_pl=$cur_pl" >> "$GITHUB_OUTPUT"
+          if [ "$bt" = "$cur_bt" ] && [ "$pl" = "$cur_pl" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-java@v4
+        if: steps.detect.outputs.changed == 'true'
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Gate — new pins install and rebuild the committed overlay identically
+        if: steps.detect.outputs.changed == 'true'
+        env:
+          BT: ${{ steps.detect.outputs.bt }}
+          PL: ${{ steps.detect.outputs.pl }}
+        run: |
+          set -euo pipefail
+          SDK=$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")
+          yes | "$SDK" --licenses > /dev/null || true
+          "$SDK" --install "build-tools;${BT}" "platforms;android-${PL}" > /dev/null
+          echo "$ANDROID_HOME/build-tools/${BT}" >> "$GITHUB_PATH"
+          ANDROID_JAR="$ANDROID_HOME/platforms/android-${PL}/android.jar" \
+            ./overlays/build.sh /tmp/check.apk
+          apksigner verify --min-sdk-version 29 --print-certs /tmp/check.apk
+          xmlhash() { unzip -p "$1" res/xml/config_webview_packages.xml | sha256sum | cut -d' ' -f1; }
+          vcode()   { aapt2 dump badging "$1" | sed -n "s/^package:.*versionCode='\([0-9]*\)'.*/\1/p"; }
+          [ "$(xmlhash overlays/WebviewOverlay.apk)" = "$(xmlhash /tmp/check.apk)" ] || {
+            echo "::error::build-tools;${BT} changes the compiled overlay XML; rerun build-overlay manually instead"
+            exit 1
+          }
+          [ "$(vcode overlays/WebviewOverlay.apk)" = "$(vcode /tmp/check.apk)" ] || {
+            echo "::error::versionCode moved; rerun build-overlay manually instead"
+            exit 1
+          }
+          echo "gate passed: build-tools;${BT} + platforms;android-${PL} rebuild the committed overlay unchanged"
+
+      - name: Rewrite the pins
+        if: steps.detect.outputs.changed == 'true'
+        env:
+          BT: ${{ steps.detect.outputs.bt }}
+          PL: ${{ steps.detect.outputs.pl }}
+          CUR_BT: ${{ steps.detect.outputs.cur_bt }}
+          CUR_PL: ${{ steps.detect.outputs.cur_pl }}
+        run: |
+          set -euo pipefail
+          sed -i \
+            -e "s|build-tools;${CUR_BT}|build-tools;${BT}|g" \
+            -e "s|build-tools/${CUR_BT}|build-tools/${BT}|g" \
+            -e "s|platforms;android-${CUR_PL}|platforms;android-${PL}|g" \
+            -e "s|platforms/android-${CUR_PL}/|platforms/android-${PL}/|g" \
+            .github/workflows/overlay.yml
+          sed -i -e "s|platforms/android-${CUR_PL}/|platforms/android-${PL}/|g" overlays/build.sh
+          git diff --stat
+
+      - name: Open pull request
+        if: steps.detect.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: chore/sdk-packages
+          delete-branch: true
+          title: 'chore: update SDK pins to build-tools ${{ steps.detect.outputs.bt }}, android-${{ steps.detect.outputs.pl }}'
+          commit-message: 'chore: update SDK pins'
+          labels: dependencies
+          body: |
+            Newest stable Android SDK packages (from dl.google.com repository XML,
+            previews excluded):
+
+            - `build-tools;${{ steps.detect.outputs.cur_bt }}` → `build-tools;${{ steps.detect.outputs.bt }}`
+            - `platforms;android-${{ steps.detect.outputs.cur_pl }}` → `platforms;android-${{ steps.detect.outputs.pl }}`
+
+            Gate passed in this run: the new pins installed with the runner's
+            sdkmanager and rebuilt `overlays/WebviewOverlay.apk` with identical
+            compiled XML sha256 and versionCode, signed `CN=Android`.
+
+            - detected: ${{ github.run_id }}
