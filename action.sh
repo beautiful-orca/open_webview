@@ -118,6 +118,20 @@ GOT=$(sha256_of "$TMP" | cut -d' ' -f1)
 [ "$GOT" = "$UP_SHA" ] || die "Hash mismatch: got $GOT, expected $UP_SHA."
 say "Checksum OK ($(wc -c <"$TMP") bytes)"
 
+# Channel-independent check, Vanadium only: the upstream sha256 travels the
+# same TLS channel as the APK, so it only detects transfer corruption. The
+# signer certificate pin ships inside the module, so an APK not signed with
+# GrapheneOS's key is rejected here. apk_signer_cert_sha() lives in
+# providers.sh; pm install verifies the cryptographic signature itself.
+if [ "$VW_PROVIDER" = "vanadium" ]; then
+	say "Verifying signer certificate..."
+	CERT=$(apk_signer_cert_sha "$TMP") ||
+		die "Could not read the APK signing block. The installed WebView is untouched."
+	[ "$CERT" = "$GRAPHENEOS_CERT_SHA256" ] ||
+		die "Signer certificate mismatch: got ${CERT:-<none>}, expected $GRAPHENEOS_CERT_SHA256. The installed WebView is untouched."
+	say "Signer cert OK ($GRAPHENEOS_CERT_SHA256)"
+fi
+
 say "Installing $VW_PACKAGE..."
 # pm install prints Success or Failure [...], and that output is the result,
 # not $?. -r is the default (replaceExisting), kept as documentation of

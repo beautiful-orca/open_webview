@@ -10,11 +10,23 @@
 # current default branch of https://gitlab.com/grapheneos/platform_external_vanadium
 # (the branch shown at the top of that page, e.g. .../-/tree/<branch>/prebuilt).
 # The module tracks a branch, not a tag: GrapheneOS replaces the prebuilt on it
-# roughly weekly, so the hash is re-read on every install and update and nothing
-# else is pinned in this repo. .github/workflows/vanadium-branch.yml opens a PR
-# when the default branch moves, so this comment stays valid across bumps.
+# roughly weekly, so the hash is re-read on every install and update.
+# .github/workflows/vanadium-branch.yml opens a PR when the default branch moves,
+# so this comment stays valid across bumps.
 ANDROID_VANADIUM_VERSION=17
 GITLAB_VANADIUM=40905333
+
+# SHA-256 of the DER encoding of GrapheneOS's signing certificate — the same
+# certificate the bundled overlay pins for app.vanadium.webview in
+# overlays/src/res/xml/config_webview_packages.xml (CI asserts the two agree;
+# see .github/workflows/vanadium-signing-key.yml). Unlike the upstream
+# content_sha256, which travels the same TLS channel as the APK and therefore
+# only detects transfer corruption, this pin lives in the module zip and is
+# independent of the download channel: a VanadiumWebView.apk that was not signed
+# with GrapheneOS's key carries a different certificate and is rejected.
+# Verified against prebuilt/arm64-multilib/VanadiumWebView.apk on branch 17
+# (the v2 and v3 signing blocks both embed exactly this certificate).
+GRAPHENEOS_CERT_SHA256=c6adb8b83c6d4c17d292afde56fd488a51d316ff8f2c11c5410223bff8a7dbb3
 
 # Cache for github_latest(): one releases/latest call per repo+asset.
 GH_LATEST_KEY=""
@@ -83,6 +95,160 @@ sha256_of() {
 	else
 		return 1
 	fi
+}
+
+# apk_signer_cert_sha <apk> — prints the SHA-256 (lowercase hex) of the first
+# signer certificate in the APK's v2/v3 signing block, or returns 1 when the APK
+# has no v2/v3 block (unsigned or v1-only) or the structure is malformed. The
+# caller compares the result against GRAPHENEOS_CERT_SHA256 and fails closed on
+# any difference: this is the channel-independent check (the cert pin ships in
+# the module, the APK arrives over GitLab), complementing the same-origin
+# content_sha256 corruption check. The platform still verifies the actual
+# cryptographic signature at pm install / boot, and the overlay's <signature>
+# entry makes WebViewUpdateService accept only this certificate.
+#
+# Pure busybox, and it never reads the whole APK: the EOCD and the signing block
+# sit at the end of the file, so only small tail slices are hexdumped. All
+# multi-byte fields are little-endian; the hex math runs in awk because busybox
+# ash has no $((16#...)). awklib holds the shared od-parsing prelude: od -v -tx1
+# output is kept as per-line hex arrays with cumulative byte offsets (building
+# one giant string with hex = hex $i is O(n^2) in busybox awk).
+# Verified against the real prebuilt/arm64-multilib/VanadiumWebView.apk (branch
+# 17): output equals sha256 of the GrapheneOS certificate, byte-for-byte, and a
+# flipped byte inside the certificate changes the output.
+apk_signer_cert_sha() {
+	local apk=$1 size win1 vals cd_size cd_off blk24 S blk_start out cert_abs cert_len
+	local awklib='
+function h2d(h,  i, c, d) {
+	d = 0; h = tolower(h)
+	for (i = 1; i <= length(h); i++) {
+		c = substr(h, i, 1)
+		d = d * 16 + index("0123456789abcdef", c) - 1
+	}
+	return d
+}
+function bytehex(b,  l) {
+	for (l = 1; l <= NR; l++)
+		if (b < cum[l] + nb[l]) return substr(hx[l], (b - cum[l]) * 2 + 1, 2)
+	return ""
+}
+function le(b, n,  i, s) {  # little-endian n-byte unsigned int at byte b
+	s = ""
+	for (i = n - 1; i >= 0; i--) s = s bytehex(b + i)
+	return h2d(s)
+}
+{ for (i = 2; i <= NF; i++) { hx[NR] = hx[NR] $i; nb[NR] = NF - 1 } }
+END {
+	total = 0
+	for (l = 1; l <= NR; l++) { cum[l] = total; total += nb[l] }
+}'
+	size=$(wc -c <"$apk") || return 1
+	[ "$size" -gt 100 ] || return 1
+	# Pass 1: find the EOCD (last PK\x05\x06 whose comment reaches EOF) within
+	# the last 65535+22 bytes and read its central-directory size/offset.
+	win1=65579
+	[ "$size" -lt "$win1" ] && win1=$size
+	vals=$(tail -c "$win1" "$apk" | od -v -tx1 | awk -v win1=$win1 "$awklib"'
+		END {
+			for (l = NR; l >= 1; l--) {           # last candidate first
+				pre = (l > 1) ? ((length(hx[l-1]) > 6) ? substr(hx[l-1], length(hx[l-1]) - 5) : hx[l-1]) : ""
+				comb = pre hx[l]
+				rest = comb; base = 0; lastp = 0
+				while ((p = index(rest, "504b0506")) > 0) {
+					lastp = base + p; base = base + p + 7; rest = substr(rest, p + 8)
+				}
+				if (lastp > 0) {
+					pl = length(pre)
+					if (lastp > pl) b = cum[l] + (lastp - pl - 1) / 2
+					else b = cum[l-1] + (length(hx[l-1]) - pl + lastp - 1) / 2
+					if (b + 22 + le(b + 20, 2) == win1) {   # EOCD must end at EOF
+						cds = le(b + 12, 4)
+						cdo = le(b + 16, 4)
+						if (cds == 4294967295 || cdo == 4294967295) { print "FAIL zip64"; exit }
+						print cds, cdo
+						exit
+					}
+				}
+			}
+			print "FAIL no-eocd"
+		}')
+	case $vals in
+	FAIL* | "") return 1 ;;
+	esac
+	set -- $vals
+	cd_size=$1 cd_off=$2                # absolute: the EOCD stores file offsets
+	[ "$cd_off" -ge 32 ] && [ $((cd_off + cd_size)) -le "$size" ] || return 1
+	# The APK signing block ends exactly where the central directory begins:
+	# ... pairs | uint64 size S | magic "APK Sig Block 42" (16B) | CD.
+	# Read the 24 bytes before the CD to get S and check the magic.
+	blk24=$(tail -c $((size - cd_off + 24)) "$apk" | head -c 24 | od -v -tx1 | awk "$awklib"'
+		END {
+			m = ""
+			for (i = 8; i < 24; i++) m = m bytehex(i)
+			if (m != "41504b2053696720426c6f636b203432") { print "FAIL no-signing-block"; exit }
+			print le(0, 8)
+		}')
+	case $blk24 in
+	FAIL* | "") return 1 ;;
+	esac
+	S=$blk24
+	[ "$S" -ge 24 ] && [ "$S" -le 65536 ] || return 1
+	blk_start=$((cd_off - 8 - S))
+	[ "$blk_start" -ge 0 ] || return 1
+	# Pass 2: hexdump the signing block itself (<= 64 KiB + 8) and walk the
+	# ID-value pairs to the v3 (0xf05368c0) or v2 (0x7109871a) signer cert.
+	out=$(tail -c $((size - blk_start)) "$apk" | head -c $((8 + S)) | od -v -tx1 | awk -v S=$S "$awklib"'
+		# Front of a v2/v3 block value: signers-seq -> signer -> signed-data ->
+		# digests, certificates-seq -> first cert. Sets cert_rel/cert_len
+		# (block-relative); returns 1 on success.
+		function parse(vs,  seq, sp, slen, signer, sdl, sd, dp, dl, cp, cl, cq, cln) {
+			n = total
+			seq = le(vs, 4)
+			if (seq <= 0 || vs + 4 + seq > n) return 0
+			sp = vs + 4
+			slen = le(sp, 4)
+			if (slen <= 0 || sp + 4 + slen > n) return 0
+			signer = sp + 4
+			sdl = le(signer, 4)
+			if (sdl <= 0 || signer + 4 + sdl > n) return 0
+			sd = signer + 4
+			dl = le(sd, 4)
+			if (dl < 0 || sd + 4 + dl + 4 > n) return 0
+			cp = sd + 4 + dl
+			cl = le(cp, 4)
+			if (cl <= 0 || cp + 4 + cl > n) return 0
+			cq = cp + 4
+			cln = le(cq, 4)
+			if (cln <= 0 || cln > 65536 || cq + 4 + cln > n) return 0
+			cert_rel = cq + 4
+			cert_len = cln
+			return 1
+		}
+		END {
+			pend = 8 + S - 24            # pairs region: [8, 8+S-24) of the block
+			p = 8
+			v3 = 0; v2 = 0
+			while (p + 12 <= pend) {
+				ln = le(p, 8)
+				id = le(p + 8, 4)
+				vs = p + 12
+				if (ln < 4 || p + 8 + ln > pend) { print "FAIL pair-overrun"; exit }
+				if (id == 0xf05368c0 && !v3) v3 = vs
+				if (id == 0x7109871a && !v2) v2 = vs
+				p += 8 + ln
+			}
+			if (v3 && parse(v3)) { print "OK", cert_rel, cert_len; exit }
+			if (v2 && parse(v2)) { print "OK", cert_rel, cert_len; exit }
+			print "FAIL no-v2-v3"
+		}')
+	case $out in
+	OK*) ;;
+	*) return 1 ;;
+	esac
+	set -- $out
+	cert_abs=$((blk_start + $2))
+	cert_len=$3
+	tail -c $((size - cert_abs)) "$apk" | head -c "$cert_len" | sha256sum | cut -d" " -f1
 }
 
 # Hook for fetch()'s per-rung progress. The default is silent; the callers

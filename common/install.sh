@@ -174,6 +174,9 @@ print_install_summary() {
 	else
 		say "Checksum:     not verified"
 	fi
+	if [[ "${VW_PROVIDER:-}" = "vanadium" ]]; then
+		say "Signer pin:   $GRAPHENEOS_CERT_SHA256 (GrapheneOS cert)"
+	fi
 }
 
 download_file() {
@@ -348,6 +351,33 @@ download_install_webview() {
 	else
 		ui_print "  No checksum available, skipping integrity check"
 		echo "[$(date "+%H:%M:%S")] No checksum for $VW_PACKAGE, integrity not checked" >>$LOG
+	fi
+
+	# Channel-independent check, Vanadium only: the content_sha256 above is
+	# fetched from the same server and TLS channel as the APK, so it proves
+	# only that the transfer was not corrupted. The signer certificate pin
+	# ships inside the module zip, so an APK that was not signed with
+	# GrapheneOS's key carries a different certificate and is rejected here.
+	# apk_signer_cert_sha() lives in providers.sh. The platform verifies the
+	# actual cryptographic signature at pm install / boot, and the overlay's
+	# <signature> entry keeps WebViewUpdateService on this same certificate.
+	if [[ "$VW_PROVIDER" = "vanadium" ]]; then
+		ui_print "  Verifying signer certificate..."
+		local cert_sha
+		cert_sha=$(apk_signer_cert_sha "$DL_DIR/webview.apk")
+		if [[ -z "$cert_sha" ]]; then
+			echo "[$(date "+%H:%M:%S")] Signer: no v2/v3 signing block in the downloaded APK" >>$LOG
+			ui_print "  Signer certificate could not be read."
+			ui_print "  Refusing to install an unverified WebView."
+			clean_up 1
+		fi
+		if [[ "$cert_sha" != "$GRAPHENEOS_CERT_SHA256" ]]; then
+			echo "[$(date "+%H:%M:%S")] Signer: got $cert_sha, expected $GRAPHENEOS_CERT_SHA256" >>$LOG
+			ui_print "  Signer certificate mismatch."
+			ui_print "  Refusing to install a WebView not signed by GrapheneOS."
+			clean_up 1
+		fi
+		say "Signer cert:  $cert_sha (GrapheneOS key)"
 	fi
 	replace_old_webview
 	install_webview

@@ -1,0 +1,113 @@
+# Weekly tripwire on the Vanadium signing key (PROJECT-NOTES §6.1, §8.2).
+#
+# The module verifies every downloaded VanadiumWebView.apk against
+# GRAPHENEOS_CERT_SHA256 in providers.sh — the SHA-256 of GrapheneOS's signing
+# certificate, the same certificate the bundled overlay pins for
+# app.vanadium.webview. That pin is only useful while upstream still signs with
+# that key, so this job watches for a rotation or a tampered upstream:
+#
+#   Gate A — the pin in providers.sh still matches the certificate in the
+#            overlay source (overlays/src/res/xml/config_webview_packages.xml);
+#   Gate B — every prebuilt directory the registry can select (plus 'arm64')
+#            still resolves on the pinned branch, and its .idsig (the APK
+#            Signature Scheme v4 file next to the APK) embeds the pinned
+#            certificate;
+#   Gate C — apksigner fully verifies each APK against its .idsig
+#            (--v4-signature-file) and the printed signer certificate digest
+#            equals the pin.
+#
+# Any failure fails the job loudly and opens nothing — a human must update the
+# pin and the overlay together when GrapheneOS rotates the key. A quiet week
+# produces no PR and no commit.
+#
+# Caveats, same as vanadium-branch.yml: cron is UTC and best-effort, a
+# scheduled workflow runs only from the default branch, and public repos
+# disable scheduled workflows after 60 days without activity —
+# workflow_dispatch stays in the trigger list so the check can always be run
+# by hand.
+
+name: Watch Vanadium signing key
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # 06:00 UTC every Monday
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vanadium-signing-key
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install apksigner
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq apksigner
+          apksigner --version
+
+      - name: Gate A — pin matches the overlay certificate
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, hashlib, re, sys
+          xml = open('overlays/src/res/xml/config_webview_packages.xml').read()
+          m = re.search(r'packageName="app\.vanadium\.webview">\s*<signature>([A-Za-z0-9+/=]+)</signature>', xml)
+          assert m, 'no app.vanadium.webview signature in the overlay source'
+          der = base64.b64decode(m.group(1))
+          digest = hashlib.sha256(der).hexdigest()
+          pin = re.search(r'^GRAPHENEOS_CERT_SHA256=([0-9a-f]{64})',
+                          open('providers.sh').read(), re.M).group(1)
+          print('overlay cert sha256:', digest)
+          print('providers.sh pin:   ', pin)
+          assert digest == pin, 'GRAPHENEOS_CERT_SHA256 drifted from the overlay certificate'
+          open('/tmp/grapheneos-cert.der', 'wb').write(der)
+          PY
+
+      - name: Gate B and C — prebuilts, idsig certificates, full v4 verify
+        env:
+          PROJECT: '40905333'
+        run: |
+          set -euo pipefail
+          branch=$(sed -n 's/^ANDROID_VANADIUM_VERSION=//p' providers.sh)
+          # Every prebuilt directory the vanadium registry row selects, plus
+          # 'arm64' (vanadium_abi() picks it on devices without 32-bit support).
+          variants=$(sed -n 's/^vanadium|[^|]*|[^|]*| *//p' providers.sh)
+          dirs=""
+          for v in ${variants}; do dirs="${dirs} ${v#*:}"; done
+          dirs="${dirs} arm64"
+          echo "branch=${branch} dirs:${dirs}"
+          for d in ${dirs}; do
+            apk_enc=$(jq -rn --arg p "prebuilt/${d}/VanadiumWebView.apk" '$p | @uri')
+            ids_enc=$(jq -rn --arg p "prebuilt/${d}/VanadiumWebView.apk.idsig" '$p | @uri')
+            base="https://gitlab.com/api/v4/projects/${PROJECT}/repository/files"
+            code=$(curl -s -o /dev/null -w '%{http_code}' -I "${base}/${apk_enc}/raw?ref=${branch}")
+            echo "${code}  prebuilt/${d}/VanadiumWebView.apk"
+            [ "${code}" = "200" ] || { echo "::error::missing APK on branch ${branch}"; exit 1; }
+            curl -fsS "${base}/${ids_enc}/raw?ref=${branch}" -o /tmp/idsig
+            curl -fsS "${base}/${apk_enc}/raw?ref=${branch}" -o /tmp/webview.apk
+            # Gate B: the idsig (small) must embed the pinned certificate.
+            python3 - <<'PY'
+            import sys
+            der = open('/tmp/grapheneos-cert.der', 'rb').read()
+            idsig = open('/tmp/idsig', 'rb').read()
+            assert der in idsig, 'idsig does not embed the pinned GrapheneOS certificate'
+            print('idsig embeds the pinned certificate (%d bytes)' % len(der))
+            PY
+            # Gate C: full cryptographic verify, v4 included, cert digest = pin.
+            apksigner verify --v4-signature-file /tmp/idsig /tmp/webview.apk
+            digest=$(apksigner verify --print-certs /tmp/webview.apk \
+              | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+            pin=$(sed -n 's/^GRAPHENEOS_CERT_SHA256=//p' providers.sh)
+            echo "apksigner cert digest: ${digest}"
+            [ "${digest}" = "${pin}" ] || { echo "::error::signer certificate is not the pinned GrapheneOS key"; exit 1; }
+            echo "ok: prebuilt/${d} verifies against its idsig with the pinned key"
+            rm -f /tmp/webview.apk /tmp/idsig
+          done

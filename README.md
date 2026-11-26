@@ -46,7 +46,11 @@ You can contribute pull requests or support the original author.
     5. [Cromite](https://github.com/uazo/cromite) (arm64 only; last update: Sep 15 2026, v153.0.8010.37, old chromium version may be a security risk)
 - Every download is verified against the upstream sha256 (GitLab `content_sha256` for
   Vanadium, release asset digests for Cromite/Thorium), and the install **fails closed**
-  when the hash cannot be read — an unverified WebView is never installed. Downloads
+  when the hash cannot be read — an unverified WebView is never installed. Vanadium APKs
+  are additionally verified against the pinned GrapheneOS signing certificate
+  (`GRAPHENEOS_CERT_SHA256` in `providers.sh`, the same certificate the overlay pins) —
+  that check is independent of the download channel, so it detects tampering, not just
+  transfer corruption. Downloads
   use retries and timeouts plus a DNS fallback ladder (direct resolver → DoH → system
   resolver), with TLS certificate verification on
 - Ships a prebuilt, pre-signed overlay APK (`overlays/WebviewOverlay.apk`) that
@@ -98,6 +102,9 @@ verifies the compiled result and opens a PR.
   the sha256 pins and opens a PR; what ships is recorded in `common/tools/VERSIONS.json`
 - `vanadium-branch.yml` — weekly: opens a PR when Vanadium's default branch moves
   (`ANDROID_VANADIUM_VERSION` in `providers.sh`)
+- `vanadium-signing-key.yml` — weekly: verifies every Vanadium prebuilt against its
+  `.idsig` with `apksigner` and fails loudly if the signing key or the pinned
+  `GRAPHENEOS_CERT_SHA256` drifts
 - `overlay.yml` — rebuilds `WebviewOverlay.apk` from `overlays/src/` when it changes
 - `sdk-packages.yml` — weekly: watches the Android SDK build-tools/platform pins used
   by the overlay build
