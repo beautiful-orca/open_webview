@@ -53,16 +53,6 @@ get_sha_gitlab() {
 		head -c 4096 |
 		grep -o '"content_sha256":"[a-f0-9]*' | cut -d'"' -f4
 }
-get_system_path_according_to_rom() {
-	local is_los=$(getprop | grep -o -c "lineage")
-
-	if [[ $is_los -gt 0 ]]; then
-		echo "system/product/app"
-	else
-		echo "system/app"
-	fi
-}
-
 # Prints "id|label|variant" for every provider this device can run, in registry order.
 available_providers() {
 	local id label min_api variants v
@@ -89,7 +79,10 @@ vanadium() {
 		ui_print "  Refusing to install an unverified WebView."
 		clean_up 1
 	fi
-	VW_SYSTEM_PATH=$(get_system_path_according_to_rom)/VanadiumWebview
+	# Always system/app: /system/app is scanned on every ROM, and the stock
+	# WebView's own path is found via cmd package dump in replace_old_webview()
+	# (§8.10, §10.8).
+	VW_SYSTEM_PATH=system/app/VanadiumWebview
 	VW_PACKAGE="app.vanadium.webview"
 	OVERLAY_APK_FILE="WebviewOverlay.apk"
 }
@@ -106,7 +99,7 @@ cromite() {
 	VW_APK_URL=https://github.com/uazo/cromite/releases/download/$(get_version_github "uazo/cromite" "$asset_name")/$asset_name
 	VW_TRICHROME_APK_URL=""
 	VW_SHA=""
-	VW_SYSTEM_PATH="$(get_system_path_according_to_rom)/CromiteWebview"
+	VW_SYSTEM_PATH=system/app/CromiteWebview
 	VW_PACKAGE="com.android.webview"
 	OVERLAY_APK_FILE=""
 }
