@@ -110,6 +110,34 @@ cromite() {
 	VW_PACKAGE="com.android.webview"
 	OVERLAY_APK_FILE=""
 }
+# Print to the installer console and to webview.log in one call, so the two
+# cannot drift. Every value the install resolves goes through here.
+say() {
+	ui_print "  $1"
+	echo "[$(date "+%H:%M:%S")] $1" >>$LOG
+}
+
+# Print and log what the install resolved, before anything is downloaded. A
+# failed install is diagnosed from webview.log, so the values that decide the
+# download and the target paths have to be in it before the first byte moves.
+print_install_summary() {
+	local dest=${DL_DIR:-$TMPDIR}
+
+	say "Provider:     ${VW_PROVIDER:-unknown}${VW_VARIANT:+ ($VW_VARIANT)}"
+	say "Architecture: $ARCH, API $API"
+	say "Package:      $VW_PACKAGE"
+	say "Download:     $VW_APK_URL"
+	[[ -n $VW_TRICHROME_APK_URL ]] && say "Library:      $VW_TRICHROME_APK_URL"
+	say "Saved to:     $dest/webview.apk"
+	say "Installs to:  $VW_SYSTEM_PATH/webview.apk"
+	if [[ -n $OVERLAY_APK_FILE ]]; then
+		say "Overlay:      ${OVERLAY_PATH:-(resolved after download)/}$OVERLAY_APK_FILE"
+	else
+		say "Overlay:      none"
+	fi
+	say "Checksum:     ${VW_SHA:-not verified}"
+}
+
 download_file() {
 	ui_print "  Downloading $1..."
 	echo "[$(date "+%H:%M:%S")] Downloading file: $1 from source: $2" >>$LOG
@@ -338,7 +366,10 @@ if [[ $API -lt 29 ]]; then
 	clean_up 1
 fi
 
-echo "# open-webview v2.5.2" > $LOG
+# The header quotes module.prop instead of a literal, so it cannot go stale.
+MODULE_VERSION=$(sed -n 's/^version=//p' "$MODPATH/module.prop" 2>/dev/null | head -n 1)
+MODULE_VERSION_CODE=$(sed -n 's/^versionCode=//p' "$MODPATH/module.prop" 2>/dev/null | head -n 1)
+echo "# open-webview ${MODULE_VERSION:-unknown} (${MODULE_VERSION_CODE:-?})" > $LOG
 echo -e "# Author: @f3ffo (Github)\n" >>$LOG
 echo "[$(date "+%H:%M:%S")] Brand: $(getprop ro.product.system.brand)" >>$LOG
 echo "[$(date "+%H:%M:%S")] Device: $(getprop ro.product.system.device)" >>$LOG
@@ -420,8 +451,9 @@ if [[ ! -z $OVERLAY_APK_FILE ]]; then
 	find_overlay_path
 fi
 
+print_install_summary
+
 if [[ $IS_MINIMAL_INSTALLATION -eq 0 ]]; then
-	ui_print "  CPU architecture: ${ARCH}"
 	download_install_webview
 fi
 
