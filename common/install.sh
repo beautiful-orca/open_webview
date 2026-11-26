@@ -174,36 +174,39 @@ create_overlay() {
 }
 find_overlay_path() {
 	echo "[$(date "+%H:%M:%S")] Finding overlay path" >>$LOG
-	if [[ -d /product/overlay ]]; then
-		OVERLAY_PATH=system/product/overlay/
-	elif [[ -d /system_ext/overlay ]]; then
-		OVERLAY_PATH=system/system_ext/overlay/
-	elif [[ -d /system/overlay ]]; then
-		OVERLAY_PATH=system/overlay/
-	elif [[ -d /system/vendor/overlay ]]; then
-		OVERLAY_PATH=system/vendor/overlay/
-	else
-		echo "[$(date "+%H:%M:%S")] Unable to find overlay path" >>$LOG
-		ui_print "  Unable to find a correct overlay path."
-		clean_up 1
-	fi
-	echo "[$(date "+%H:%M:%S")] Overlay path: $OVERLAY_PATH" >>$LOG
+	# Probe the real mount points, not the /system/<part> aliases: from Android 10
+	# /product, /vendor, /odm and /system_ext are separate mounts and /system/<part>
+	# is only a compatibility symlink that some ROMs omit. The module path stays
+	# under system/ because that is the tree Magisk mounts.
+	# Order is unchanged from the original, with /vendor inserted immediately before
+	# its /system/vendor alias, so a device that resolves today keeps the same path.
+	local real module
+	for candidate in \
+		"/product/overlay:system/product/overlay/" \
+		"/system_ext/overlay:system/system_ext/overlay/" \
+		"/system/overlay:system/overlay/" \
+		"/vendor/overlay:system/vendor/overlay/" \
+		"/system/vendor/overlay:system/vendor/overlay/"; do
+		real=${candidate%%:*}
+		module=${candidate#*:}
+		if [[ -d $real ]]; then
+			OVERLAY_PATH=$module
+			echo "[$(date "+%H:%M:%S")] Overlay path: $real -> $module" >>$LOG
+			return
+		fi
+	done
+	# /system/overlay is scanned on every Android version and force_overlay creates
+	# it in the module, so this is a fallback rather than an abort. Reaching it means
+	# the ROM has no overlay directory at all, which no supported device does.
+	OVERLAY_PATH=system/overlay/
+	echo "[$(date "+%H:%M:%S")] No overlay dir found, falling back to /system/overlay" >>$LOG
+	ui_print "  No overlay directory found, using /system/overlay."
 }
 force_overlay() {
 	echo "[$(date "+%H:%M:%S")] Forcing overlay" >>$LOG
 	mkdir -p "$MODPATH"/$OVERLAY_PATH
 	echo "[$(date "+%H:%M:%S")] Copy $OVERLAY_APK_FILE  -  to: $OVERLAY_PATH" >>$LOG
 	cp_ch "$MODPATH"/common/$OVERLAY_APK_FILE "$MODPATH"/$OVERLAY_PATH
-	if [[ -d "$MODPATH"/product ]]; then
-		if [[ -d "$MODPATH"/system/product ]]; then
-			echo "[$(date "+%H:%M:%S")] Using /system/product as overlay path" >>$LOG
-			cp -rf "$MODPATH"/product/* "$MODPATH"/system/product/
-			rm -rf "$MODPATH"/product/
-		else
-			echo "[$(date "+%H:%M:%S")] Moving from /product to /system" >>$LOG
-			mv "$MODPATH"/product/ "$MODPATH"/system/
-		fi
-	fi
 }
 create_config_file() {
 	# The old RESET/IS_REINSTALL/OVERLAY_PATH/OVERLAY_APK_FILE/VW_OVERLAY_PACKAGE
@@ -296,6 +299,12 @@ if [[ -f $CONFIG_FILE ]]; then
 	rm -rf $CONFIG_FILE
 fi
 
+# Probe the overlay path before the download: it reads the filesystem only,
+# and a missing overlay directory must not cost the whole download.
+if [[ ! -z $OVERLAY_APK_FILE ]]; then
+	find_overlay_path
+fi
+
 if [[ $IS_MINIMAL_INSTALLATION -eq 0 ]]; then
 	ui_print "  CPU architecture: ${ARCH}"
 	download_install_webview
@@ -304,7 +313,6 @@ fi
 # Only install the overlay if the webview supports it
 if [[ ! -z $OVERLAY_APK_FILE ]]; then
 	create_overlay
-	find_overlay_path
 	force_overlay
 	if [[ ! -f "$MODPATH"/$OVERLAY_PATH$OVERLAY_APK_FILE ]]; then
 		echo "[$(date "+%H:%M:%S")] Overlay file missing in path: $OVERLAY_PATH" >>$LOG
