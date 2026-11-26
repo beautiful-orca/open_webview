@@ -1,0 +1,68 @@
+# Release pipeline: builds open-webview.zip with create-module.sh and attaches it to
+# the GitHub release for the tag. update.json's zipUrl points at
+# releases/download/<tag>/open-webview.zip, so the asset name (MODULE_NAME in
+# create-module.sh) is load-bearing — do not rename it.
+#
+# Fires automatically on `git push origin vX.Y.Z`. Tags that were pushed before this
+# workflow existed (v2.6.0) can be released manually: Actions -> release -> Run
+# workflow -> tag input.
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v2.6.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write   # create the release, upload the asset
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      - name: Install 7z
+        run: sudo apt-get update && sudo apt-get install -y p7zip-full
+
+      - name: Build the module zip
+        run: ./create-module.sh
+
+      - name: Verify the zip
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag || github.ref_name }}"
+          7z l open-webview.zip
+          # the module.prop inside the zip must carry the tag being released
+          7z e -so open-webview.zip module.prop | grep -qx "version=$tag"
+          # markdown never ships (-x!*.md in create-module.sh)
+          ! 7z l open-webview.zip | grep -q '\.md$'
+          # tools ship compressed, not raw
+          7z l open-webview.zip | grep -q 'common/tools/tools.tar.xz'
+          ! 7z l open-webview.zip | grep -q 'common/tools/tools/'
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag || github.ref_name }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "release $tag already exists; re-uploading the asset"
+            gh release upload "$tag" open-webview.zip --clobber
+          else
+            gh release create "$tag" open-webview.zip --title "$tag" --generate-notes
+          fi
+          gh release view "$tag" --json tagName,assets -q '.tagName, (.assets[].name)'
