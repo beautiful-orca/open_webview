@@ -1,4 +1,12 @@
 
+# v2.6.2 (fork by beautiful-orca)
+
+- Installer ends with a success summary (reboot required, WebView picker in Developer options, action-button updates); `NVBASE` defaults to `/data/adb` on modern Magisk [09c708b](https://github.com/beautiful-orca/open_webview/commit/09c708b109204e6fb3932aecfe1710f69046f202)
+- Failed installs/updates copy the log to `/sdcard` (`webview.log` / `action.log`) and point at the issue tracker with the no-guarantee caveat; README documents the after-install flow and log locations [09c708b](https://github.com/beautiful-orca/open_webview/commit/09c708b109204e6fb3932aecfe1710f69046f202)
+- Metadata fetches run the DNS ladder with live progress and the big download shows the curl progress meter in the Magisk console; the Vanadium checksum resolves in the background during the download (still fail-closed) [09c708b](https://github.com/beautiful-orca/open_webview/commit/09c708b109204e6fb3932aecfe1710f69046f202)
+- Repacked `tools.tar.xz` with literal arch members so the install-time extraction matches; Volume-Key-Selector fallbacks for 64-bit-only devices and missing `getevent`; the action button reads the installed version live via `dumpsys` and backfills the state file [09c708b](https://github.com/beautiful-orca/open_webview/commit/09c708b109204e6fb3932aecfe1710f69046f202)
+- Release v2.6.2: version bumped in `module.prop` and `update.json`, module description shortened [16f6aa1](https://github.com/beautiful-orca/open_webview/commit/16f6aa10cdd140c1c95b738e4c5c91d5ef3c3e9e)
+
 # v2.6.1 (fork by beautiful-orca)
 
 - Commit the tool binaries compressed (`common/tools/tools.tar.xz`) instead of raw — repo-size hygiene; the module zip content is unchanged [c95117a](https://github.com/beautiful-orca/open_webview/commit/c95117a823a8bb2042071d9a283e0c0206d56ddd)
