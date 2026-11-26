@@ -1,6 +1,6 @@
 # Fork of Open WebView - [XDA Thread](https://xdaforums.com/t/magisk-module-webview-open-webview.4496119/)
 
-This module replaces your system WebView systemlessly with Magisk.
+This module replaces your system WebView systemlessly. On install, pick a WebView implementation (Vanadium, Thorium, or Cromite) from the menu; use the action button to update the installed WebView without re-flashing.
 
 > [!NOTE]
 > 26/11: Cromite is currently not updated fast enough (last release: Sep 15 2026, v153.0.8010.37 — an old Chromium version may be a security risk).  

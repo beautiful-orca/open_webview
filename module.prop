@@ -3,6 +3,6 @@ name=Open Webview
 version=v2.6.1
 versionCode=261
 author=beautiful-orca
-description=Open Webview install vanadium or cromite system webview
+description=Replaces your system WebView systemlessly. On install, pick a WebView implementation (Vanadium, Thorium, or Cromite) from the menu; use the action button to update the installed WebView without re-flashing.
 minMagisk=20400
 updateJson=https://raw.githubusercontent.com/beautiful-orca/open_webview/master/update.json
