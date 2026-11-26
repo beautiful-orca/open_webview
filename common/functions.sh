@@ -190,7 +190,14 @@ unzip -o "$ZIPFILE" -x 'META-INF/*' 'common/functions.sh' -d $MODPATH >&2
 
 # Custom setup
 # extract extra tools
-[ -f "$MODPATH/common/tools/tools.tar.xz" ] && tar -xvf $MODPATH/common/tools/tools.tar.xz -C $MODPATH/common/tools >/dev/null
+if [ -f "$MODPATH/common/tools/tools.tar.xz" ]; then
+	# Extract only the target architecture: the archive holds all four
+	# (~57 MB), one is ever used. $ARCH is the ABI name since the x64
+	# normalisation in customize.sh, which matches the member names.
+	# clean_up is defined in install.sh, sourced later — a failure here is
+	# caught by the curl smoke test right below.
+	tar -xf "$MODPATH/common/tools/tools.tar.xz" -C "$MODPATH/common/tools" "$ARCH/" || clean_up 1
+fi
 # curl binary: a variable, not an alias, so the download ladder in install.sh
 # can pass per-attempt DNS flags and the call stays testable off-device.
 ui_print "  Initialization..."
