@@ -52,13 +52,3 @@ readelf -dW common/tools/tools/arm64/curl | grep NEEDED          # no libcares.s
 `c-ares/%s` is the format string curl uses to print the resolver version, so it
 is present exactly when c-ares is linked. Do not look for a literal
 `c-ares/1.34.9` — the version is filled in at runtime by `ares_version()`.
-
-## `tools/<arch>/aapt2`
-
-Unchanged. From `skittles9823/QuickSwitch`, built with NDK r26c, 4 KB aligned.
-Only used at build time if the overlay is compiled on the host; the module ships
-a prebuilt overlay APK.
-
-## `zipsigner`, `zipsigner-3.0-dexed.jar`
-
-Unchanged. From `Magisk-Modules-Repo/zipsigner`.

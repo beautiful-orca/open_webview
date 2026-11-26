@@ -73,9 +73,7 @@ You can contribute pull requests or support the original author.
 - [Thorium by Alex313031](https://github.com/Alex313031/thorium)
 - [cUrl](https://github.com/curl/curl)
 - [cUrl binary](https://github.com/F3FFO/compile_zlib_openssl_curl_android)
-- [Zipsigner by osm0sis](https://github.com/Magisk-Modules-Repo/zipsigner)
 - [Cromite by uazo](https://github.com/uazo/cromite)
-- [AAPT2 binaries](https://github.com/skittles9823/QuickSwitch)
 - [WebViewChanger](https://github.com/Lordify95/WebViewChanger)
 
 ## License

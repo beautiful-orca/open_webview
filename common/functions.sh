@@ -195,12 +195,9 @@ case $ARCH in
   x64) TOOLS_ARCH=x86_64 ;;
   *)   TOOLS_ARCH=$ARCH ;;
 esac
-alias aapt2='$MODPATH/common/tools/$TOOLS_ARCH/aapt2'
 alias curl='$MODPATH/common/tools/$TOOLS_ARCH/curl --dns-servers 1.1.1.1,1.0.0.1'
-alias sign='su -c $MODPATH/common/tools/zipsigner'
 # permission
 chmod -R 0755 "$MODPATH/common/tools/$TOOLS_ARCH"
-chmod 0755 "$MODPATH/common/tools/zipsigner"
 ui_print "  Initialization finished."
 
 # Run addons
