@@ -6,6 +6,9 @@ ANDROID_VANADIUM_VERSION=17
 OVERLAY_APK_FILE="WebviewOverlay.apk"
 CONFIG_FILE="$MODPATH"/.webview
 LOG="$MODPATH"/webview.log
+# Downloads go to /data, not $TMPDIR: Magisk sets TMPDIR=/dev/tmp, a tmpfs,
+# so downloading there costs RAM (~843 MB peak with the old extra copies).
+DL_DIR=/data/local/tmp/open_webview
 IS_MINIMAL_INSTALLATION=0
 
 get_version_github() {
@@ -85,7 +88,7 @@ download_file() {
 	ui_print "  Downloading $1..."
 	echo "[$(date "+%H:%M:%S")] Downloading file: $1 from source: $2" >>$LOG
 
-	local out="$TMPDIR/$1"
+	local out="$DL_DIR/$1"
 	local base="--connect-timeout 15 --max-time 1800 --retry 5 --retry-delay 3 --retry-connrefused -fsSL"
 	local dns_flag ok=0
 	rm -f "$out"
@@ -123,6 +126,8 @@ download_file() {
 		ui_print ""
 		clean_up 1
 	fi
+	# system_server has to be able to open the APK (pm install reads it).
+	chmod 0644 "$out"
 	echo "[$(date "+%H:%M:%S")] File downloaded: $out" >>$LOG
 }
 # sha256sum is a busybox applet, so it is on PATH in the installer under Magisk,
@@ -201,32 +206,31 @@ replace_old_webview() {
 	ui_print "  Replacing stock $VW_PACKAGE at $code_path"
 	mktouch "$MODPATH"$code_path/.replace
 }
-extract_lib() {
-	echo "[$(date "+%H:%M:%S")] Extracting lib from downloaded webview as zip" >>$LOG
-	mkdir -p "$MODPATH"/$VW_SYSTEM_PATH/lib/arm64 "$MODPATH"/$VW_SYSTEM_PATH/lib/arm
-	echo "[$(date "+%H:%M:%S")] Copying from $TMPDIR/webview/lib/arm64-v8a/ to $MODPATH/$VW_SYSTEM_PATH/lib/arm64" >>$LOG
-	cp -rf "$TMPDIR"/webview/lib/arm64-v8a/* "$MODPATH"/$VW_SYSTEM_PATH/lib/arm64
-	echo "[$(date "+%H:%M:%S")] Copying from $TMPDIR/webview/lib/armeabi-v7a/ to $MODPATH/$VW_SYSTEM_PATH/lib/arm" >>$LOG
-	cp -rf "$TMPDIR"/webview/lib/armeabi-v7a/* "$MODPATH"/$VW_SYSTEM_PATH/lib/arm
-}
 copy_webview_file() {
-	echo "[$(date "+%H:%M:%S")] Copy webview.apk from: $TMPDIR  -  to: $VW_SYSTEM_PATH" >>$LOG
-	cp_ch "$TMPDIR"/webview.apk "$MODPATH"/$VW_SYSTEM_PATH/webview.apk
-	cp_ch "$TMPDIR"/webview.apk "$TMPDIR"/webview.zip
+	echo "[$(date "+%H:%M:%S")] Copy webview.apk from: $DL_DIR  -  to: $VW_SYSTEM_PATH" >>$LOG
+	cp_ch "$DL_DIR"/webview.apk "$MODPATH"/$VW_SYSTEM_PATH/webview.apk
 }
 install_webview() {
 	echo "[$(date "+%H:%M:%S")] Install webview" >>$LOG
 	ui_print "  Installing webview..."
 	mktouch "$MODPATH"/$VW_SYSTEM_PATH/.replace
 	copy_webview_file
-	if [[ -f "$TMPDIR"/trichrome.apk ]]; then
-		su -c pm install --install-location 1 "$TMPDIR"/trichrome.apk >&2
+	if [[ -f "$DL_DIR"/trichrome.apk ]]; then
+		su -c pm install --install-location 1 "$DL_DIR"/trichrome.apk >&2
 	fi
-	mkdir -p "$TMPDIR"/webview
-	unzip -qo "$TMPDIR"/webview.zip -d "$TMPDIR"/webview >&2
-	extract_lib
 }
 download_install_webview() {
+	# Fail in the first second if /data cannot hold the APK plus headroom.
+	mkdir -p "$DL_DIR"
+	chmod 0755 "$DL_DIR"
+	local avail
+	avail=$(df -k /data | awk 'NR==2 {print $4}')
+	if [[ ${avail:-0} -lt 400000 ]]; then
+		echo "[$(date "+%H:%M:%S")] Not enough free space on /data: ${avail:-unknown} KB available, need ~400 MB" >>$LOG
+		ui_print "  Not enough free space on /data: need ~400 MB."
+		clean_up 1
+	fi
+
 	download_file webview.apk $VW_APK_URL
 
 	if [[ ! -z $VW_TRICHROME_APK_URL ]]; then
@@ -235,7 +239,7 @@ download_install_webview() {
 
 	if [[ ! -z $VW_SHA ]]; then
 		ui_print "  Checking integrity..."
-		check_integrity "$TMPDIR/webview.apk" "$VW_SHA"
+		check_integrity "$DL_DIR/webview.apk" "$VW_SHA"
 	else
 		ui_print "  No checksum available, skipping integrity check"
 		echo "[$(date "+%H:%M:%S")] No checksum for $VW_PACKAGE, integrity not checked" >>$LOG
@@ -298,6 +302,7 @@ clean_up() {
 	fi
 
 	ui_print "  Cleaning up..."
+	[ -n "$DL_DIR" ] && rm -rf "$DL_DIR" 2>/dev/null
 	echo "[$(date "+%H:%M:%S")] Installation success" >>$LOG
 }
 

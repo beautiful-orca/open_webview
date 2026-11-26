@@ -8,6 +8,9 @@ abort() {
   rm -rf $MODPATH 2>/dev/null
   cleanup
   rm -rf $TMPDIR 2>/dev/null
+  # /data/local/tmp persists across reboots; $TMPDIR does not. Remove the
+  # download dir on every abort path so repeated failures do not accumulate.
+  [ -n "$DL_DIR" ] && rm -rf "$DL_DIR" 2>/dev/null
   exit 1
 }
 
