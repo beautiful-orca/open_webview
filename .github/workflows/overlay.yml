@@ -1,0 +1,81 @@
+name: build-overlay
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install the pinned build-tools and platform
+        run: |
+          SDK=$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")
+          yes | "$SDK" --licenses > /dev/null || true
+          "$SDK" --install "build-tools;36.0.0" "platforms;android-35" > /dev/null
+          echo "$ANDROID_HOME/build-tools/36.0.0" >> "$GITHUB_PATH"
+
+      - name: Build to a temp path
+        run: |
+          ANDROID_JAR="$ANDROID_HOME/platforms/android-35/android.jar" \
+            ./overlays/build.sh /tmp/rebuilt.apk
+
+      - name: Verify
+        run: |
+          set -e
+          apksigner verify --print-certs /tmp/rebuilt.apk
+          aapt2 dump badging /tmp/rebuilt.apk
+
+      # The signed APK is not byte-reproducible (§12.12), so a byte diff would open a PR
+      # on every run. Compare the compiled provider XML and the versionCode instead.
+      - name: Compare content against the committed APK
+        id: cmp
+        run: |
+          set -e
+          xmlhash() { unzip -p "$1" res/xml/config_webview_packages.xml | sha256sum | cut -d' ' -f1; }
+          vcode()   { aapt2 dump badging "$1" | sed -n "s/^package:.*versionCode='\([0-9]*\)'.*/\1/p"; }
+
+          committed=overlays/WebviewOverlay.apk
+          new=/tmp/rebuilt.apk
+
+          echo "vcode=$(vcode "$new")" >> "$GITHUB_OUTPUT"
+          echo "sha=$(sha256sum "$new" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+          if [ -f "$committed" ] &&
+             [ "$(xmlhash "$committed")" = "$(xmlhash "$new")" ] &&
+             [ "$(vcode "$committed")" = "$(vcode "$new")" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "overlay unchanged; no PR"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            cp "$new" "$committed"
+          fi
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebviewOverlay
+          path: /tmp/rebuilt.apk
+
+      - name: Open a pull request
+        if: steps.cmp.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: rebuild-overlay
+          title: Rebuild WebviewOverlay.apk
+          commit-message: Rebuild WebviewOverlay.apk
+          body: |
+            Rebuilt from `overlays/src/` with the pinned aapt2.
+
+            - versionCode: `${{ steps.cmp.outputs.vcode }}`
+            - sha256: `${{ steps.cmp.outputs.sha }}`
