@@ -181,7 +181,12 @@ then the installer switch.
   Done 2026-11-26 as v2.6.0 (see Decisions); the `v2.6.0` tag still needs to be created
   in the real clone.
 - `VanadiumConfig.apk` (§10.5), `service.sh` (§3.3e), `pm disable` (§14.6), per-arch
-  `curl.zip` packaging (§4.3f), repo-size compression of binaries (§4.3f).
+  `curl.zip` packaging (§4.3f).
+- ~~Repo-size compression of binaries (§4.3f)~~ — forward part done 2026-11-26
+  (`c95117a`): raw binaries untracked, committed `tools.tar.xz` instead. The history
+  purge (filter-repo + force-push + re-tag, ~148 MiB of historical binary blobs) was
+  re-decided 2026-11-26: **not now** — it rewrites all commit hashes and breaks the
+  CHANGELOG links, so it needs an explicit decision at purge time.
 
 ## Release gate (run before tagging any release)
 
