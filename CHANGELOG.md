@@ -1,7 +1,7 @@
 
 # v2.6.3 (fork by beautiful-orca)
 
-- README: License section now links this fork's own LICENSE (stale "Copyright 2024 F3FFO" line removed), curl fork attribution clarified in the automation and credits sections [cc98e4f](https://github.com/beautiful-orca/open_webview/commit/cc98e4f3936d167508ffb2a579946419e0d03cd0)
+- README: License section now links this fork's own LICENSE (stale line removed), curl fork attribution clarified in the automation and credits sections [cc98e4f](https://github.com/beautiful-orca/open_webview/commit/cc98e4f3936d167508ffb2a579946419e0d03cd0)
 - Vanadium APKs are now also verified against the pinned GrapheneOS signing certificate (`GRAPHENEOS_CERT_SHA256` in `providers.sh`, checked on-device by `apk_signer_cert_sha()` in `common/install.sh` and `action.sh`, fail closed on mismatch). The upstream sha256 is fetched over the same channel as the APK, so it only detects transfer corruption; the certificate pin ships in the module zip and is independent of the download channel, so it detects tampering [8ccb602](https://github.com/beautiful-orca/open_webview/commit/8ccb6025eac69ec046e8002b89b04af0eebfae5b)
 - New `vanadium-signing-key.yml` workflow — weekly: full `apksigner verify --v4-signature-file` of every Vanadium prebuilt against its `.idsig`, asserting the signer certificate still equals the pin and the pin still matches the certificate in `overlays/src/`; fails loudly on a key rotation [8ccb602](https://github.com/beautiful-orca/open_webview/commit/8ccb6025eac69ec046e8002b89b04af0eebfae5b)
 - Release v2.6.3: version bumped in `module.prop` and `update.json` [0820517](https://github.com/beautiful-orca/open_webview/commit/082051703b259a67e428e8c0effb06b3469560ae)
