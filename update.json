@@ -1,6 +1,6 @@
 {
-  "version": "v2.6.1",
-  "versionCode": 261,
+  "version": "v2.6.2",
+  "versionCode": 262,
   "zipUrl": "https://github.com/beautiful-orca/open_webview/releases/download/v2.6.1/open-webview.zip",
   "changelog": "https://raw.githubusercontent.com/beautiful-orca/open_webview/master/CHANGELOG.md"
 }
