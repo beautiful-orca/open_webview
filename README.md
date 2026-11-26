@@ -98,6 +98,7 @@ verifies the compiled result and opens a PR.
 - [curl binary](https://github.com/beautiful-orca/curl-android) — fork of [vvb2060/curl-android](https://github.com/vvb2060/curl-android), built with c-ares so `--dns-servers` works; refreshed monthly by CI and pinned in `common/tools/VERSIONS.json`
 - [Cromite by uazo](https://github.com/uazo/cromite)
 - [WebViewChanger](https://github.com/Lordify95/WebViewChanger)
+- [Vanadium-WebViewBrowser by NoneBaiano](https://github.com/NoneBaiano/Vanadium-WebViewBrowser) (fork of WebViewChanger; download-with-retries and uninstall patterns)
 
 ## License
 
