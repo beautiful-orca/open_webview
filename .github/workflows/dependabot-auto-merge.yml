@@ -4,7 +4,7 @@
 #   1. author is dependabot[bot] — the other bots in this repo (update-binaries,
 #      overlay, vanadium-branch) author as github-actions[bot] via
 #      create-pull-request and change shipped artifacts, so they stay manual
-#      (PLAN.md §16.6: the branch PR must not be auto-merged);
+#      (the vanadium-branch PR must not be auto-merged);
 #   2. every changed file is under .github/workflows/ — for the github-actions
 #      ecosystem that is all Dependabot ever edits, so a PR touching anything
 #      else fails closed here.
