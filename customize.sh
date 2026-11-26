@@ -56,6 +56,10 @@ set_permissions() {
 
 SKIPUNZIP=1
 unzip -qjo "$ZIPFILE" 'common/functions.sh' -d $TMPDIR >&2
+# Magisk and KernelSU both report ARCH=x64 for an x86_64 device (util_functions.sh,
+# api_level_arch_detect), while the tools directory and the provider registry use the
+# ABI name. Normalise once, here, before anything reads $ARCH.
+[ "$ARCH" = "x64" ] && ARCH=x86_64
 . $TMPDIR/functions.sh
 
 OVERLAY_IMAGE_EXTRA=0     # number of kb need to be added to overlay.img

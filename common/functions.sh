@@ -190,14 +190,9 @@ unzip -o "$ZIPFILE" -x 'META-INF/*' 'common/functions.sh' -d $MODPATH >&2
 [ -f "$MODPATH/common/tools/tools.tar.xz" ] && tar -xvf $MODPATH/common/tools/tools.tar.xz -C $MODPATH/common/tools >/dev/null
 # alias
 ui_print "  Initialization..."
-# Magisk sets ARCH=x64 on x86_64 devices, but the tools directory is x86_64/
-case $ARCH in
-  x64) TOOLS_ARCH=x86_64 ;;
-  *)   TOOLS_ARCH=$ARCH ;;
-esac
-alias curl='$MODPATH/common/tools/$TOOLS_ARCH/curl --dns-servers 1.1.1.1,1.0.0.1'
+alias curl='$MODPATH/common/tools/$ARCH/curl --dns-servers 1.1.1.1,1.0.0.1'
 # permission
-chmod -R 0755 "$MODPATH/common/tools/$TOOLS_ARCH"
+chmod -R 0755 "$MODPATH/common/tools/$ARCH"
 ui_print "  Initialization finished."
 
 # Run addons
