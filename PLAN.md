@@ -47,9 +47,10 @@ Carried from PROJECT-NOTES (§10, §12.13, §14.10, §15.11):
 
 New decisions (2026-11-26):
 
-- Work lands as **commits on master — no version bumps, no `update.json` change, no tags
-  until release time**. `module.prop`/`update.json` spelling (`v` prefix) is unified at
-  release time too (§8.3.2 D7).
+- Work lands as commits on master. **Re-decided 2026-11-26:** release versioning is cut
+  now, not at release time — v2.6.0 in `module.prop` (`version=v2.6.0`,
+  `versionCode=260`, `v` prefix per §8.3.2 D7) and `update.json` in lockstep (§13.6
+  decision 1). The git tag is still owed: this checkout is not a git repository.
 - `$ARCH` is normalized to the ABI name in `customize.sh` (`x64` → `x86_64`); the
   `TOOLS_ARCH` workaround in `functions.sh` is removed.
 - Thorium as a selectable provider is **deferred to Phase 4** (its overlay entry ships
@@ -176,7 +177,9 @@ then the installer switch.
 
 - Full KernelSU/APatch compatibility incl. the metamodule detection block and the
   `.replace`-under-overlayfs question (§8.9). Magisk only for now.
-- Version bumps, `update.json`, `v`-prefix unification, git tags — at release time.
+- ~~Version bumps, `update.json`, `v`-prefix unification, git tags — at release time.~~
+  Done 2026-11-26 as v2.6.0 (see Decisions); the `v2.6.0` tag still needs to be created
+  in the real clone.
 - `VanadiumConfig.apk` (§10.5), `service.sh` (§3.3e), `pm disable` (§14.6), per-arch
   `curl.zip` packaging (§4.3f), repo-size compression of binaries (§4.3f).
 
