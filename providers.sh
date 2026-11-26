@@ -6,9 +6,13 @@
 # Nothing here may read installer-only variables ($MODPATH, $LOG) or depend
 # on $ARCH/$API at source time; available_providers() reads those when called.
 
-# Vanadium tracks a branch, not a tag: GrapheneOS replaces the prebuilt on it
-# roughly weekly, so the hash is re-read on every install and update and
-# nothing is pinned in this repo.
+# To get the latest Vanadium prebuilts, change ANDROID_VANADIUM_VERSION to the
+# current default branch of https://gitlab.com/grapheneos/platform_external_vanadium
+# (the branch shown at the top of that page, e.g. .../-/tree/<branch>/prebuilt).
+# The module tracks a branch, not a tag: GrapheneOS replaces the prebuilt on it
+# roughly weekly, so the hash is re-read on every install and update and nothing
+# else is pinned in this repo. .github/workflows/vanadium-branch.yml opens a PR
+# when the default branch moves, so this comment stays valid across bumps.
 ANDROID_VANADIUM_VERSION=17
 GITLAB_VANADIUM=40905333
 

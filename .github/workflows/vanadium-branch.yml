@@ -1,0 +1,125 @@
+# Weekly watch on GrapheneOS' platform_external_vanadium default branch (PROJECT-NOTES §16).
+#
+# The module pins only a branch, not a version: ANDROID_VANADIUM_VERSION in providers.sh
+# is re-read on every install, so a new APK version on the same branch needs no commit —
+# only a default-branch change does. This job polls the GitLab API once a week, and opens
+# a PR that rewrites the one line when it moved.
+#
+# Two hard gates before any PR: Gate A rejects a branch name that is not N or N-qprN (a
+# human should look when GrapheneOS reorganises), Gate B HEAD-requests every prebuilt
+# directory the vanadium registry row can select (plus 'arm64', which vanadium_abi()
+# picks on devices without 32-bit support) on the target branch — a missing file means
+# the module would 404 on install, and no PR is opened.
+#
+# Caveats, same as the binaries pipeline: cron is UTC and best-effort, a scheduled
+# workflow runs only from the default branch, and public repos disable scheduled
+# workflows after 60 days without activity — workflow_dispatch stays in the trigger
+# list so the watcher can always be run by hand. A PR opened with GITHUB_TOKEN does
+# not trigger other workflows.
+
+name: Watch Vanadium branch
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'   # 05:00 UTC every Monday
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Override the branch to check (testing only)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write        # push the branch
+  pull-requests: write   # open the PR
+
+concurrency:
+  group: vanadium-branch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect
+        id: detect
+        env:
+          PROJECT: '40905333'
+          OVERRIDE: ${{ inputs.target_branch }}
+        run: |
+          set -euo pipefail
+          current=$(sed -n 's/^ANDROID_VANADIUM_VERSION=//p' providers.sh)
+          if [ -n "${OVERRIDE}" ]; then
+            latest="${OVERRIDE}"
+          else
+            latest=$(curl -fsS "https://gitlab.com/api/v4/projects/${PROJECT}" | jq -r .default_branch)
+          fi
+          echo "current=${current} latest=${latest}"
+          if ! printf '%s' "${latest}" | grep -Eq '^[0-9]+(-qpr[0-9]+)?$'; then
+            echo "::error::unexpected branch name '${latest}'"; exit 1
+          fi
+          echo "current=${current}" >> "$GITHUB_OUTPUT"
+          if [ "${current}" = "${latest}" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true"  >> "$GITHUB_OUTPUT"
+            echo "latest=${latest}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify the target branch carries what the module downloads
+        if: steps.detect.outputs.changed == 'true'
+        env:
+          PROJECT: '40905333'
+          REF: ${{ steps.detect.outputs.latest }}
+        run: |
+          set -euo pipefail
+          # Every prebuilt directory the vanadium registry row selects, plus
+          # 'arm64' — vanadium_abi() picks the non-multilib arm64 prebuilt on
+          # devices whose abilist has no armeabi-v7a.
+          variants=$(sed -n 's/^vanadium|[^|]*|[^|]*| *//p' providers.sh)
+          dirs=""
+          for v in ${variants}; do dirs="${dirs} ${v#*:}"; done
+          dirs="${dirs} arm64"
+          fail=0
+          for d in ${dirs}; do
+            enc=$(jq -rn --arg p "prebuilt/${d}/VanadiumWebView.apk" '$p | @uri')
+            code=$(curl -s -o /dev/null -w '%{http_code}' -I \
+              "https://gitlab.com/api/v4/projects/${PROJECT}/repository/files/${enc}/raw?ref=${REF}")
+            echo "${code}  prebuilt/${d}/VanadiumWebView.apk"
+            [ "${code}" = "200" ] || fail=1
+          done
+          if [ "${fail}" -ne 0 ]; then
+            echo "::error::branch ${REF} is missing prebuilts that providers.sh requests"
+            exit 1
+          fi
+
+      - name: Rewrite the branch
+        if: steps.detect.outputs.changed == 'true'
+        env:
+          REF: ${{ steps.detect.outputs.latest }}
+        run: |
+          set -euo pipefail
+          sed -i "s|^ANDROID_VANADIUM_VERSION=.*|ANDROID_VANADIUM_VERSION=${REF}|" providers.sh
+          git diff --stat
+
+      - name: Open pull request
+        if: steps.detect.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: chore/vanadium-branch-${{ steps.detect.outputs.latest }}
+          delete-branch: true
+          title: 'chore: follow Vanadium branch ${{ steps.detect.outputs.latest }}'
+          commit-message: 'Vanadium branch changed to ${{ steps.detect.outputs.latest }}'
+          labels: upstream
+          body: |
+            GrapheneOS moved `platform_external_vanadium` to branch
+            `${{ steps.detect.outputs.latest }}` (was `${{ steps.detect.outputs.current }}`).
+
+            `providers.sh` now points at the new branch. Gate B passed: every prebuilt
+            directory the vanadium registry row selects resolves on
+            `${{ steps.detect.outputs.latest }}`.
+
+            - upstream: https://gitlab.com/grapheneos/platform_external_vanadium/-/tree/${{ steps.detect.outputs.latest }}/prebuilt
+            - detected: ${{ github.run_id }}
