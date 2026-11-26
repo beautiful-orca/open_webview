@@ -1,8 +1,8 @@
 
 # Unreleased
 
-- Vanadium APKs are now also verified against the pinned GrapheneOS signing certificate (`GRAPHENEOS_CERT_SHA256` in `providers.sh`, checked on-device by `apk_signer_cert_sha()` in `common/install.sh` and `action.sh`, fail closed on mismatch). The upstream sha256 is fetched over the same channel as the APK, so it only detects transfer corruption; the certificate pin ships in the module zip and is independent of the download channel, so it detects tampering [338349d](https://github.com/beautiful-orca/open_webview/commit/338349d48ffd782aa39373bd8aa0075a787329ff)
-- New `vanadium-signing-key.yml` workflow — weekly: full `apksigner verify --v4-signature-file` of every Vanadium prebuilt against its `.idsig`, asserting the signer certificate still equals the pin and the pin still matches the certificate in `overlays/src/`; fails loudly on a key rotation [338349d](https://github.com/beautiful-orca/open_webview/commit/338349d48ffd782aa39373bd8aa0075a787329ff)
+- Vanadium APKs are now also verified against the pinned GrapheneOS signing certificate (`GRAPHENEOS_CERT_SHA256` in `providers.sh`, checked on-device by `apk_signer_cert_sha()` in `common/install.sh` and `action.sh`, fail closed on mismatch). The upstream sha256 is fetched over the same channel as the APK, so it only detects transfer corruption; the certificate pin ships in the module zip and is independent of the download channel, so it detects tampering [8ccb602](https://github.com/beautiful-orca/open_webview/commit/8ccb6025eac69ec046e8002b89b04af0eebfae5b)
+- New `vanadium-signing-key.yml` workflow — weekly: full `apksigner verify --v4-signature-file` of every Vanadium prebuilt against its `.idsig`, asserting the signer certificate still equals the pin and the pin still matches the certificate in `overlays/src/`; fails loudly on a key rotation [8ccb602](https://github.com/beautiful-orca/open_webview/commit/8ccb6025eac69ec046e8002b89b04af0eebfae5b)
 
 # v2.6.3 (fork by beautiful-orca)
 
